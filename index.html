@@ -838,7 +838,7 @@
     <div class="container">
         <header class="header">
             <h1>🧬 Cancer Research Visualizer</h1>
-            <p>Live Academic Search • PubMed • arXiv • bioRxiv • AI-Powered Personalization</p>
+            <p>Live Academic Search • AI Visual Abstracts • PubMed • arXiv • bioRxiv</p>
         </header>
         
         <section class="search-section" aria-labelledby="search-heading">
@@ -889,8 +889,8 @@
         </section>
         
         <div class="api-info" id="apiInfo" style="display: block;">
-            ✅ <strong>Live Academic Data:</strong> Searching PubMed (NCBI), arXiv preprints, and bioRxiv biology preprints. 
-            All results are from real research databases with no mock data.
+            ✅ <strong>Live Academic Data + AI Visual Abstracts:</strong> Searching PubMed (NCBI), arXiv preprints, and bioRxiv biology preprints. 
+            Click "Generate AI Visual Abstract" on any paper for comprehensive infographic-style summaries with patient icons and study flow diagrams.
         </div>
         
         <div id="status" class="status" role="status" aria-live="polite"></div>
@@ -2355,8 +2355,9 @@
                 loadUserProfile();
                 setupEventListeners();
                 updateSearchStats();
-                updateStatus('🚀 Ready to search! Enter cancer research keywords to find papers with detailed visual abstracts from PubMed, arXiv, and bioRxiv.');
+                updateStatus('🚀 Ready to search! Enter cancer research keywords to find papers with AI-generated visual abstracts from PubMed, arXiv, and bioRxiv.');
                 console.log('✅ Cancer Research Visualizer initialized successfully');
+                console.log('🤖 New Feature: AI-assisted comprehensive visual abstracts with patient icons and study flow diagrams');
                 console.log('📚 Enhanced Features: Visual abstracts, key findings extraction, query highlighting');
                 console.log('🔍 Data Sources: PubMed (NCBI), arXiv preprints, bioRxiv biology preprints');
                 
