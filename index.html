@@ -347,13 +347,13 @@
             transform: translateY(-2px);
         }
         
-        .api-warning {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
+        .api-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
             border-radius: 8px;
             padding: 15px;
             margin: 20px 40px;
-            color: #856404;
+            color: #0c5460;
             text-align: center;
         }
         
@@ -385,7 +385,7 @@
     <div class="container">
         <header class="header">
             <h1>🧬 Cancer Research Visualizer</h1>
-            <p>Intelligent Search • Real Academic Data • AI-Powered Personalization</p>
+            <p>Live Academic Search • PubMed • arXiv • bioRxiv • AI-Powered Personalization</p>
         </header>
         
         <section class="search-section" aria-labelledby="search-heading">
@@ -435,9 +435,9 @@
             </div>
         </section>
         
-        <div class="api-warning" id="apiWarning" style="display: none;">
-            ⚠️ <strong>Note:</strong> Some external APIs may be limited by CORS policies. 
-            For full functionality, consider deploying with a backend proxy or using the application locally.
+        <div class="api-info" id="apiInfo" style="display: block;">
+            ✅ <strong>Live Academic Data:</strong> Searching PubMed (NCBI), arXiv preprints, and bioRxiv biology preprints. 
+            All results are from real research databases with no mock data.
         </div>
         
         <div id="status" class="status" role="status" aria-live="polite"></div>
@@ -550,44 +550,58 @@
             searchTimeout = setTimeout(performSearch, 300);
         }
 
-        // Enhanced API search with better error handling and fallbacks
+        // Real API search using CORS-friendly academic databases
         async function performInternetSearch(query, timeFrame = '') {
             const papers = [];
             let hasResults = false;
             
-            // Try Semantic Scholar first
+            // Search PubMed (NCBI E-utilities - CORS friendly)
             try {
-                const semanticPapers = await searchSemanticScholar(query, timeFrame);
-                if (semanticPapers && semanticPapers.length > 0) {
-                    papers.push(...semanticPapers);
+                console.log('🔬 Searching PubMed database...');
+                const pubmedPapers = await searchPubMed(query, timeFrame);
+                if (pubmedPapers && pubmedPapers.length > 0) {
+                    papers.push(...pubmedPapers);
                     hasResults = true;
+                    console.log(`✅ Found ${pubmedPapers.length} papers from PubMed`);
                 }
             } catch (error) {
-                console.warn('Semantic Scholar search failed:', error);
-                document.getElementById('apiWarning').style.display = 'block';
+                console.warn('PubMed search failed:', error.message);
             }
             
-            // Try CrossRef as backup
+            // Search arXiv (for preprints - CORS friendly)
             try {
-                const crossrefPapers = await searchCrossRef(query, timeFrame);
-                if (crossrefPapers && crossrefPapers.length > 0) {
-                    papers.push(...crossrefPapers);
+                console.log('📄 Searching arXiv database...');
+                const arxivPapers = await searchArXiv(query, timeFrame);
+                if (arxivPapers && arxivPapers.length > 0) {
+                    papers.push(...arxivPapers);
                     hasResults = true;
+                    console.log(`✅ Found ${arxivPapers.length} preprints from arXiv`);
                 }
             } catch (error) {
-                console.warn('CrossRef search failed:', error);
-                document.getElementById('apiWarning').style.display = 'block';
+                console.warn('arXiv search failed:', error.message);
             }
             
-            // If no results from APIs, provide mock data with clear labeling
-            if (!hasResults) {
-                return generateMockResults(query, timeFrame);
+            // Search bioRxiv (biology preprints - CORS friendly)
+            try {
+                console.log('🧬 Searching bioRxiv database...');
+                const biorxivPapers = await searchBioRxiv(query, timeFrame);
+                if (biorxivPapers && biorxivPapers.length > 0) {
+                    papers.push(...biorxivPapers);
+                    hasResults = true;
+                    console.log(`✅ Found ${biorxivPapers.length} preprints from bioRxiv`);
+                }
+            } catch (error) {
+                console.warn('bioRxiv search failed:', error.message);
+            }
+            
+            if (!hasResults || papers.length === 0) {
+                throw new Error('No papers found in PubMed, arXiv, or bioRxiv databases. Try different keywords or expand time range.');
             }
             
             // Remove duplicates and apply learning
             const uniquePapers = removeDuplicates(papers);
             const filteredPapers = timeFrame ? uniquePapers.filter(p => isWithinTimeFrame(p.date, timeFrame)) : uniquePapers;
-            return applyLearningToResults(filteredPapers, query).slice(0, 10);
+            return applyLearningToResults(filteredPapers, query).slice(0, 12);
         }
 
         // Remove duplicate papers based on title similarity
@@ -606,162 +620,217 @@
             return unique;
         }
 
-        // Enhanced Semantic Scholar search with better error handling
-        async function searchSemanticScholar(query, timeFrame = '') {
+        // PubMed E-utilities API (NCBI - CORS friendly)
+        async function searchPubMed(query, timeFrame = '') {
             try {
-                let apiUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=15&fields=title,authors,year,journal,abstract,url,externalIds,venue`;
+                // First, search for PMIDs
+                let searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=20&retmode=json`;
                 
-                // Add year filter for Semantic Scholar
+                // Add date filter if specified
                 if (timeFrame) {
                     const cutoffDate = getDateRange(timeFrame);
                     if (cutoffDate) {
-                        const minYear = cutoffDate.getFullYear();
-                        apiUrl += `&year=${minYear}-`;
+                        const fromDate = `${cutoffDate.getFullYear()}/01/01`;
+                        const toDate = `${new Date().getFullYear()}/12/31`;
+                        searchUrl += `&datetype=pdat&mindate=${fromDate}&maxdate=${toDate}`;
                     }
                 }
                 
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
+                const searchResponse = await fetch(searchUrl);
+                if (!searchResponse.ok) throw new Error(`PubMed search failed: ${searchResponse.status}`);
+                
+                const searchData = await searchResponse.json();
+                const pmids = searchData.esearchresult?.idlist || [];
+                
+                if (pmids.length === 0) return [];
+                
+                // Fetch detailed information for each PMID
+                const summaryUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmids.join(',')}&retmode=json`;
+                const summaryResponse = await fetch(summaryUrl);
+                
+                if (!summaryResponse.ok) throw new Error(`PubMed summary failed: ${summaryResponse.status}`);
+                
+                const summaryData = await summaryResponse.json();
+                const papers = [];
+                
+                for (const pmid of pmids) {
+                    const paper = summaryData.result?.[pmid];
+                    if (paper && paper.title) {
+                        papers.push({
+                            title: paper.title,
+                            authors: paper.authors ? paper.authors.map(a => a.name).slice(0, 5) : ['Unknown Author'],
+                            source: paper.source || 'PubMed Journal',
+                            date: paper.pubdate ? paper.pubdate.split(' ')[0] : 'N/A',
+                            abstract: paper.abstract || 'Abstract available at PubMed link.',
+                            url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+                            keywords: extractKeywords(query, paper.abstract),
+                            doi: paper.doi || null,
+                            source_api: 'PubMed',
+                            pmid: pmid
+                        });
                     }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
-                const data = await response.json();
-                
-                if (!data.data || data.data.length === 0) {
-                    return [];
-                }
-                
-                return data.data.map(item => ({
-                    title: item.title || 'Untitled Research Paper',
-                    authors: item.authors ? item.authors.map(a => a.name || 'Unknown').slice(0, 5) : ['Unknown Author'],
-                    source: item.venue || item.journal?.name || 'Semantic Scholar',
-                    date: item.year ? item.year.toString() : 'N/A',
-                    abstract: item.abstract ? item.abstract.substring(0, 800) : 'Abstract not available.',
-                    url: item.url || (item.externalIds?.DOI ? `https://doi.org/${item.externalIds.DOI}` : '#'),
-                    keywords: extractKeywords(query, item.abstract),
-                    doi: item.externalIds?.DOI,
-                    source_api: 'Semantic Scholar'
-                }));
+                return papers;
                 
             } catch (error) {
-                console.error('Semantic Scholar API error:', error);
+                console.error('PubMed API error:', error);
                 throw error;
             }
         }
 
-        // Enhanced CrossRef search
-        async function searchCrossRef(query, timeFrame = '') {
+        // arXiv API (CORS friendly)
+        async function searchArXiv(query, timeFrame = '') {
             try {
-                let apiUrl = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=15&select=title,author,published,abstract,URL,DOI,container-title,type`;
+                let searchUrl = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=15&sortBy=relevance&sortOrder=descending`;
                 
-                // Add date filter for CrossRef
-                if (timeFrame) {
-                    const cutoffDate = getDateRange(timeFrame);
-                    if (cutoffDate) {
-                        const fromDate = cutoffDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-                        apiUrl += `&filter=from-pub-date:${fromDate}`;
+                const response = await fetch(searchUrl);
+                if (!response.ok) throw new Error(`arXiv search failed: ${response.status}`);
+                
+                const xmlText = await response.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                
+                const entries = xmlDoc.querySelectorAll('entry');
+                const papers = [];
+                
+                for (const entry of entries) {
+                    const title = entry.querySelector('title')?.textContent?.trim();
+                    const summary = entry.querySelector('summary')?.textContent?.trim();
+                    const published = entry.querySelector('published')?.textContent?.trim();
+                    const link = entry.querySelector('link[title="pdf"]')?.getAttribute('href') || 
+                               entry.querySelector('id')?.textContent?.trim();
+                    
+                    const authors = Array.from(entry.querySelectorAll('author name')).map(
+                        author => author.textContent?.trim()
+                    ).slice(0, 5);
+                    
+                    // Apply time filter
+                    if (timeFrame && published) {
+                        const paperYear = new Date(published).getFullYear();
+                        const cutoffDate = getDateRange(timeFrame);
+                        if (cutoffDate && paperYear < cutoffDate.getFullYear()) {
+                            continue;
+                        }
+                    }
+                    
+                    if (title && summary) {
+                        papers.push({
+                            title: title,
+                            authors: authors.length > 0 ? authors : ['Unknown Author'],
+                            source: 'arXiv Preprint',
+                            date: published ? new Date(published).getFullYear().toString() : 'N/A',
+                            abstract: summary.substring(0, 800),
+                            url: link || '#',
+                            keywords: extractKeywords(query, summary),
+                            doi: null,
+                            source_api: 'arXiv'
+                        });
                     }
                 }
                 
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'User-Agent': 'Cancer Research Visualizer (mailto:research@example.com)'
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                
-                if (!data.message?.items || data.message.items.length === 0) {
-                    return [];
-                }
-                
-                return data.message.items.map(item => ({
-                    title: Array.isArray(item.title) ? item.title[0] : (item.title || 'Untitled Research Paper'),
-                    authors: item.author ? item.author.map(a => {
-                        const given = a.given || '';
-                        const family = a.family || '';
-                        return `${given} ${family}`.trim() || 'Unknown Author';
-                    }).slice(0, 5) : ['Unknown Author'],
-                    source: Array.isArray(item['container-title']) ? item['container-title'][0] : 'CrossRef Journal',
-                    date: item.published?.['date-parts']?.[0]?.[0]?.toString() || 'N/A',
-                    abstract: item.abstract ? item.abstract.replace(/<[^>]*>/g, '').substring(0, 800) : 'Abstract not available.',
-                    url: item.URL || (item.DOI ? `https://doi.org/${item.DOI}` : '#'),
-                    keywords: extractKeywords(query, item.abstract),
-                    doi: item.DOI,
-                    source_api: 'CrossRef'
-                }));
+                return papers;
                 
             } catch (error) {
-                console.error('CrossRef API error:', error);
+                console.error('arXiv API error:', error);
                 throw error;
             }
         }
 
-        // Generate high-quality mock results when APIs fail
-        function generateMockResults(query, timeFrame = '') {
-            const currentYear = new Date().getFullYear();
-            let mockYear = currentYear;
-            
-            // Adjust year based on timeframe
-            if (timeFrame) {
-                const cutoffDate = getDateRange(timeFrame);
-                if (cutoffDate) {
-                    const minYear = cutoffDate.getFullYear();
-                    mockYear = Math.floor(Math.random() * (currentYear - minYear + 1)) + minYear;
-                }
-            } else {
-                mockYear = Math.floor(Math.random() * 5) + (currentYear - 4); // Random year in last 5 years
+        // bioRxiv API (biology preprints - CORS friendly)
+        async function searchBioRxiv(query, timeFrame = '') {
+            try {
+                // bioRxiv search endpoint
+                const searchUrl = `https://api.biorxiv.org/details/biorxiv/2020-01-01/2024-12-31`;
+                
+                const response = await fetch(searchUrl);
+                if (!response.ok) throw new Error(`bioRxiv search failed: ${response.status}`);
+                
+                const data = await response.json();
+                if (!data.collection || data.collection.length === 0) return [];
+                
+                // Filter results by query terms
+                const queryTerms = query.toLowerCase().split(' ').filter(term => term.length > 2);
+                const filteredPapers = data.collection.filter(paper => {
+                    const searchText = `${paper.title} ${paper.abstract}`.toLowerCase();
+                    return queryTerms.some(term => searchText.includes(term));
+                }).slice(0, 10); // Limit to 10 results
+                
+                const papers = filteredPapers.map(paper => {
+                    // Apply time filter
+                    if (timeFrame) {
+                        const paperYear = new Date(paper.date).getFullYear();
+                        const cutoffDate = getDateRange(timeFrame);
+                        if (cutoffDate && paperYear < cutoffDate.getFullYear()) {
+                            return null;
+                        }
+                    }
+                    
+                    return {
+                        title: paper.title,
+                        authors: paper.authors ? paper.authors.split(';').slice(0, 5) : ['Unknown Author'],
+                        source: 'bioRxiv Preprint',
+                        date: paper.date ? new Date(paper.date).getFullYear().toString() : 'N/A',
+                        abstract: paper.abstract ? paper.abstract.substring(0, 800) : 'Abstract not available.',
+                        url: `https://www.biorxiv.org/content/10.1101/${paper.doi}v1`,
+                        keywords: extractKeywords(query, paper.abstract),
+                        doi: paper.doi,
+                        source_api: 'bioRxiv'
+                    };
+                }).filter(paper => paper !== null);
+                
+                return papers;
+                
+            } catch (error) {
+                console.error('bioRxiv API error:', error);
+                // Try alternative bioRxiv approach
+                return await searchBioRxivAlternative(query, timeFrame);
             }
-            
-            const mockPapers = [
-                {
-                    title: `Novel Therapeutic Approaches for ${query} Treatment: A Comprehensive Review`,
-                    authors: ['Dr. Sarah Chen', 'Prof. Michael Rodriguez', 'Dr. Emily Watson'],
-                    source: 'Nature Cancer Research',
-                    date: mockYear.toString(),
-                    abstract: `This comprehensive review examines recent advances in ${query} research, focusing on innovative therapeutic strategies and their clinical implications. Our analysis covers breakthrough discoveries in targeted therapy, immunomodulation, and precision medicine approaches. The study synthesizes findings from over 200 recent publications to provide insights into current treatment paradigms and future research directions.`,
-                    url: '#',
-                    keywords: [query, 'therapeutic approaches', 'clinical research'],
-                    source_api: 'Mock Data'
-                },
-                {
-                    title: `Biomarker Discovery in ${query}: Machine Learning Applications`,
-                    authors: ['Dr. James Park', 'Dr. Lisa Thompson', 'Prof. David Kumar'],
-                    source: 'Journal of Translational Medicine',
-                    date: (mockYear - 1).toString(),
-                    abstract: `This study presents novel machine learning algorithms for biomarker identification in ${query}. Using advanced computational methods and large-scale genomic data, we identified potential diagnostic and prognostic markers. Our findings suggest new pathways for early detection and personalized treatment strategies.`,
-                    url: '#',
-                    keywords: [query, 'biomarkers', 'machine learning', 'genomics'],
-                    source_api: 'Mock Data'
-                },
-                {
-                    title: `Clinical Trial Results: Innovative ${query} Intervention Protocol`,
-                    authors: ['Dr. Maria Gonzalez', 'Prof. Robert Kim', 'Dr. Amanda Foster'],
-                    source: 'New England Journal of Medicine',
-                    date: mockYear.toString(),
-                    abstract: `We report results from a Phase II clinical trial testing a novel intervention for ${query}. The randomized controlled study enrolled 240 participants and demonstrated significant improvements in primary endpoints. Safety profile was favorable with manageable side effects. These results support advancement to Phase III trials.`,
-                    url: '#',
-                    keywords: [query, 'clinical trial', 'intervention', 'randomized controlled'],
-                    source_api: 'Mock Data'
-                }
-            ];
-            
-            return mockPapers.map(paper => ({
-                ...paper,
-                personalRelevance: Math.floor(Math.random() * 30) + 60 // 60-90%
-            }));
+        }
+
+        // Alternative bioRxiv search using their collection endpoint
+        async function searchBioRxivAlternative(query, timeFrame = '') {
+            try {
+                // Get recent papers and filter locally
+                const today = new Date();
+                const oneYearAgo = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+                const fromDate = oneYearAgo.toISOString().split('T')[0];
+                const toDate = today.toISOString().split('T')[0];
+                
+                const searchUrl = `https://api.biorxiv.org/details/biorxiv/${fromDate}/${toDate}/0`;
+                
+                const response = await fetch(searchUrl);
+                if (!response.ok) return []; // Fail silently for bioRxiv
+                
+                const data = await response.json();
+                if (!data.collection) return [];
+                
+                // Filter by query terms
+                const queryTerms = query.toLowerCase().split(' ').filter(term => term.length > 2);
+                const relevantPapers = data.collection
+                    .filter(paper => {
+                        const searchText = `${paper.title} ${paper.abstract || ''}`.toLowerCase();
+                        return queryTerms.some(term => searchText.includes(term));
+                    })
+                    .slice(0, 8)
+                    .map(paper => ({
+                        title: paper.title,
+                        authors: paper.authors ? paper.authors.split(';').map(a => a.trim()).slice(0, 4) : ['Unknown Author'],
+                        source: 'bioRxiv Preprint',
+                        date: paper.date ? new Date(paper.date).getFullYear().toString() : 'N/A',
+                        abstract: paper.abstract ? paper.abstract.substring(0, 600) : 'Abstract not available.',
+                        url: `https://www.biorxiv.org/content/10.1101/${paper.doi}`,
+                        keywords: extractKeywords(query, paper.abstract),
+                        doi: paper.doi,
+                        source_api: 'bioRxiv'
+                    }));
+                
+                return relevantPapers;
+                
+            } catch (error) {
+                console.warn('bioRxiv alternative search failed:', error);
+                return []; // Return empty array instead of throwing
+            }
         }
 
         // Extract relevant keywords from query and abstract
@@ -1150,7 +1219,6 @@
                 if (resultsDiv) resultsDiv.innerHTML = '';
                 
                 document.getElementById('searchStats').style.display = 'none';
-                document.getElementById('apiWarning').style.display = 'none';
                 
                 // Reset profile
                 userProfile = {
@@ -1160,7 +1228,7 @@
                 };
                 
                 localStorage.removeItem('cancerResearchProfile');
-                updateStatus('🗑️ All data cleared. Learning system reset.');
+                updateStatus('🗑️ All data cleared. Learning system reset. Ready to search live academic databases!');
                 showNotification('All data cleared successfully!');
                 
             } catch (error) {
@@ -1255,8 +1323,10 @@
                 loadUserProfile();
                 setupEventListeners();
                 updateSearchStats();
-                updateStatus('🚀 Ready to search academic papers! Enter keywords to begin.');
-                console.log('Cancer Research Visualizer initialized successfully');
+                updateStatus('🚀 Ready to search real academic databases! Enter cancer research keywords to find papers from PubMed, arXiv, and bioRxiv.');
+                console.log('✅ Cancer Research Visualizer initialized successfully');
+                console.log('📚 Searching: PubMed (NCBI), arXiv preprints, bioRxiv biology preprints');
+                console.log('🔍 All results are from live academic databases - no mock data used');
                 
             } catch (error) {
                 console.error('Initialization error:', error);
