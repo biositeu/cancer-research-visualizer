@@ -55,6 +55,24 @@
             transition: all 0.3s;
             background: white;
         }
+        .time-frame-select {
+            padding: 18px 20px;
+            border: 3px solid #9b59b6;
+            border-radius: 30px;
+            font-size: 1.1em;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            min-width: 160px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .time-frame-select:focus {
+            outline: none;
+            border-color: #8e44ad;
+            box-shadow: 0 0 0 4px rgba(155, 89, 182, 0.2);
+            transform: translateY(-2px);
+        }
         .search-input:focus {
             outline: none;
             border-color: #2980b9;
@@ -342,6 +360,7 @@
         @media (max-width: 768px) {
             .search-controls { flex-direction: column; }
             .search-input { min-width: auto; }
+            .time-frame-select { min-width: auto; width: 100%; }
             .results-grid { 
                 grid-template-columns: 1fr; 
                 padding: 20px;
@@ -378,6 +397,16 @@
                        placeholder="Enter research keywords (e.g., 'liquid biopsy breast cancer', 'CRISPR immunotherapy')..." 
                        aria-describedby="search-help" />
                 <div id="search-help" class="sr-only">Enter keywords to search for research papers</div>
+                
+                <label for="timeFrame" class="sr-only">Select time frame</label>
+                <select id="timeFrame" class="time-frame-select">
+                    <option value="">All years</option>
+                    <option value="6m">Last 6 months</option>
+                    <option value="1y">Last 1 year</option>
+                    <option value="2y">Last 2 years</option>
+                    <option value="3y">Last 3 years</option>
+                    <option value="5y">Last 5 years</option>
+                </select>
                 
                 <button class="search-btn" id="searchBtn">
                     <span id="searchBtnText">🔍 Search Papers</span>
@@ -434,6 +463,36 @@
             totalRatings: 0,
             avgRating: 0
         };
+
+        // Time frame utilities
+        function getDateRange(timeFrame) {
+            const now = new Date();
+            const ranges = {
+                '6m': new Date(now.setMonth(now.getMonth() - 6)),
+                '1y': new Date(now.setFullYear(now.getFullYear() - 1)),
+                '2y': new Date(now.setFullYear(now.getFullYear() - 2)),
+                '3y': new Date(now.setFullYear(now.getFullYear() - 3)),
+                '5y': new Date(now.setFullYear(now.getFullYear() - 5))
+            };
+            
+            return ranges[timeFrame] || null;
+        }
+
+        function formatDateForAPI(date) {
+            return date.getFullYear().toString();
+        }
+
+        function isWithinTimeFrame(paperDate, timeFrame) {
+            if (!timeFrame || !paperDate) return true;
+            
+            const cutoffDate = getDateRange(timeFrame);
+            if (!cutoffDate) return true;
+            
+            const paperYear = parseInt(paperDate);
+            const cutoffYear = cutoffDate.getFullYear();
+            
+            return paperYear >= cutoffYear;
+        }
 
         // Enhanced localStorage management with error handling
         function loadUserProfile() {
@@ -492,13 +551,13 @@
         }
 
         // Enhanced API search with better error handling and fallbacks
-        async function performInternetSearch(query) {
+        async function performInternetSearch(query, timeFrame = '') {
             const papers = [];
             let hasResults = false;
             
             // Try Semantic Scholar first
             try {
-                const semanticPapers = await searchSemanticScholar(query);
+                const semanticPapers = await searchSemanticScholar(query, timeFrame);
                 if (semanticPapers && semanticPapers.length > 0) {
                     papers.push(...semanticPapers);
                     hasResults = true;
@@ -510,7 +569,7 @@
             
             // Try CrossRef as backup
             try {
-                const crossrefPapers = await searchCrossRef(query);
+                const crossrefPapers = await searchCrossRef(query, timeFrame);
                 if (crossrefPapers && crossrefPapers.length > 0) {
                     papers.push(...crossrefPapers);
                     hasResults = true;
@@ -522,12 +581,13 @@
             
             // If no results from APIs, provide mock data with clear labeling
             if (!hasResults) {
-                return generateMockResults(query);
+                return generateMockResults(query, timeFrame);
             }
             
             // Remove duplicates and apply learning
             const uniquePapers = removeDuplicates(papers);
-            return applyLearningToResults(uniquePapers, query).slice(0, 10);
+            const filteredPapers = timeFrame ? uniquePapers.filter(p => isWithinTimeFrame(p.date, timeFrame)) : uniquePapers;
+            return applyLearningToResults(filteredPapers, query).slice(0, 10);
         }
 
         // Remove duplicate papers based on title similarity
@@ -547,9 +607,18 @@
         }
 
         // Enhanced Semantic Scholar search with better error handling
-        async function searchSemanticScholar(query) {
+        async function searchSemanticScholar(query, timeFrame = '') {
             try {
-                const apiUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=15&fields=title,authors,year,journal,abstract,url,externalIds,venue`;
+                let apiUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=15&fields=title,authors,year,journal,abstract,url,externalIds,venue`;
+                
+                // Add year filter for Semantic Scholar
+                if (timeFrame) {
+                    const cutoffDate = getDateRange(timeFrame);
+                    if (cutoffDate) {
+                        const minYear = cutoffDate.getFullYear();
+                        apiUrl += `&year=${minYear}-`;
+                    }
+                }
                 
                 const response = await fetch(apiUrl, {
                     method: 'GET',
@@ -587,9 +656,18 @@
         }
 
         // Enhanced CrossRef search
-        async function searchCrossRef(query) {
+        async function searchCrossRef(query, timeFrame = '') {
             try {
-                const apiUrl = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=15&select=title,author,published,abstract,URL,DOI,container-title,type`;
+                let apiUrl = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=15&select=title,author,published,abstract,URL,DOI,container-title,type`;
+                
+                // Add date filter for CrossRef
+                if (timeFrame) {
+                    const cutoffDate = getDateRange(timeFrame);
+                    if (cutoffDate) {
+                        const fromDate = cutoffDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+                        apiUrl += `&filter=from-pub-date:${fromDate}`;
+                    }
+                }
                 
                 const response = await fetch(apiUrl, {
                     method: 'GET',
@@ -632,13 +710,27 @@
         }
 
         // Generate high-quality mock results when APIs fail
-        function generateMockResults(query) {
+        function generateMockResults(query, timeFrame = '') {
+            const currentYear = new Date().getFullYear();
+            let mockYear = currentYear;
+            
+            // Adjust year based on timeframe
+            if (timeFrame) {
+                const cutoffDate = getDateRange(timeFrame);
+                if (cutoffDate) {
+                    const minYear = cutoffDate.getFullYear();
+                    mockYear = Math.floor(Math.random() * (currentYear - minYear + 1)) + minYear;
+                }
+            } else {
+                mockYear = Math.floor(Math.random() * 5) + (currentYear - 4); // Random year in last 5 years
+            }
+            
             const mockPapers = [
                 {
                     title: `Novel Therapeutic Approaches for ${query} Treatment: A Comprehensive Review`,
                     authors: ['Dr. Sarah Chen', 'Prof. Michael Rodriguez', 'Dr. Emily Watson'],
                     source: 'Nature Cancer Research',
-                    date: '2024',
+                    date: mockYear.toString(),
                     abstract: `This comprehensive review examines recent advances in ${query} research, focusing on innovative therapeutic strategies and their clinical implications. Our analysis covers breakthrough discoveries in targeted therapy, immunomodulation, and precision medicine approaches. The study synthesizes findings from over 200 recent publications to provide insights into current treatment paradigms and future research directions.`,
                     url: '#',
                     keywords: [query, 'therapeutic approaches', 'clinical research'],
@@ -648,7 +740,7 @@
                     title: `Biomarker Discovery in ${query}: Machine Learning Applications`,
                     authors: ['Dr. James Park', 'Dr. Lisa Thompson', 'Prof. David Kumar'],
                     source: 'Journal of Translational Medicine',
-                    date: '2024',
+                    date: (mockYear - 1).toString(),
                     abstract: `This study presents novel machine learning algorithms for biomarker identification in ${query}. Using advanced computational methods and large-scale genomic data, we identified potential diagnostic and prognostic markers. Our findings suggest new pathways for early detection and personalized treatment strategies.`,
                     url: '#',
                     keywords: [query, 'biomarkers', 'machine learning', 'genomics'],
@@ -658,7 +750,7 @@
                     title: `Clinical Trial Results: Innovative ${query} Intervention Protocol`,
                     authors: ['Dr. Maria Gonzalez', 'Prof. Robert Kim', 'Dr. Amanda Foster'],
                     source: 'New England Journal of Medicine',
-                    date: '2024',
+                    date: mockYear.toString(),
                     abstract: `We report results from a Phase II clinical trial testing a novel intervention for ${query}. The randomized controlled study enrolled 240 participants and demonstrated significant improvements in primary endpoints. Safety profile was favorable with manageable side effects. These results support advancement to Phase III trials.`,
                     url: '#',
                     keywords: [query, 'clinical trial', 'intervention', 'randomized controlled'],
@@ -719,12 +811,14 @@
         // Enhanced search function with better error handling
         async function performSearch() {
             const searchInput = document.getElementById('searchInput');
+            const timeFrameSelect = document.getElementById('timeFrame');
             const searchBtn = document.getElementById('searchBtn');
             const searchBtnText = document.getElementById('searchBtnText');
             
             if (!searchInput || !searchBtn) return;
             
             const query = sanitizeInput(searchInput.value);
+            const timeFrame = timeFrameSelect ? timeFrameSelect.value : '';
             
             if (!validateQuery(query)) {
                 showError('Please enter a valid search term (2-1000 characters)');
@@ -734,6 +828,7 @@
             // Update user profile
             userProfile.searches.push({
                 query: query,
+                timeFrame: timeFrame,
                 timestamp: new Date().toISOString()
             });
             userProfile.totalSearches++;
@@ -744,22 +839,23 @@
                 searchBtn.disabled = true;
                 if (searchBtnText) searchBtnText.textContent = '🔄 Searching...';
                 
-                updateStatus('🔍 Searching academic databases...', 'searching');
+                const timeFrameText = timeFrame ? ` (${getTimeFrameLabel(timeFrame)})` : '';
+                updateStatus(`🔍 Searching academic databases${timeFrameText}...`, 'searching');
                 
-                // Perform search
-                const papers = await performInternetSearch(query);
+                // Perform search with time frame
+                const papers = await performInternetSearch(query, timeFrame);
                 
                 if (!papers || papers.length === 0) {
-                    throw new Error('No papers found. Try different keywords.');
+                    throw new Error('No papers found. Try different keywords or expand time range.');
                 }
                 
                 // Update results
                 currentResults = papers;
-                displayResults(papers, query);
+                displayResults(papers, query, timeFrame);
                 
                 const apiSources = [...new Set(papers.map(p => p.source_api).filter(Boolean))];
                 const sourceText = apiSources.length > 0 ? ` from ${apiSources.join(' & ')}` : '';
-                updateStatus(`✅ Found ${papers.length} papers${sourceText} for "${query}"`);
+                updateStatus(`✅ Found ${papers.length} papers${sourceText} for "${query}"${timeFrameText}`);
                 
                 // Save and update
                 saveUserProfile();
@@ -779,8 +875,19 @@
             }
         }
 
+        function getTimeFrameLabel(timeFrame) {
+            const labels = {
+                '6m': 'Last 6 months',
+                '1y': 'Last year',
+                '2y': 'Last 2 years',
+                '3y': 'Last 3 years',
+                '5y': 'Last 5 years'
+            };
+            return labels[timeFrame] || 'All years';
+        }
+
         // Enhanced results display
-        function displayResults(results, query) {
+        function displayResults(results, query, timeFrame = '') {
             const resultsDiv = document.getElementById('results');
             if (!resultsDiv) return;
             
@@ -790,7 +897,7 @@
                 resultsDiv.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: #6c757d; grid-column: 1 / -1;">
                         <h3>🔍 No papers found</h3>
-                        <p>Try different or broader search terms</p>
+                        <p>Try different or broader search terms${timeFrame ? ' or expand the time range' : ''}</p>
                     </div>
                 `;
                 return;
@@ -802,12 +909,13 @@
             
             const apiSources = [...new Set(results.map(r => r.source_api).filter(Boolean))];
             const sourceInfo = apiSources.length > 0 ? `Data from: ${apiSources.join(', ')}` : 'Research Database Results';
+            const timeFrameText = timeFrame ? ` • ${getTimeFrameLabel(timeFrame)}` : '';
             
             headerDiv.innerHTML = `
                 <p style="font-size: 1.2em; color: #2c5234; font-weight: 600;">
                     🔬 <strong>Research Results:</strong> "${escapeHtml(query)}"<br>
                     <span style="font-size: 0.95em; opacity: 0.8; margin-top: 8px; display: block;">
-                        ${results.length} papers found • ${sourceInfo}
+                        ${results.length} papers found • ${sourceInfo}${timeFrameText}
                         ${userProfile.totalRatings > 0 ? ` • Personalized ranking active` : ''}
                     </span>
                 </p>
@@ -1033,8 +1141,14 @@
             
             try {
                 currentResults = [];
-                document.getElementById('searchInput').value = '';
-                document.getElementById('results').innerHTML = '';
+                const searchInput = document.getElementById('searchInput');
+                const timeFrameSelect = document.getElementById('timeFrame');
+                const resultsDiv = document.getElementById('results');
+                
+                if (searchInput) searchInput.value = '';
+                if (timeFrameSelect) timeFrameSelect.value = '';
+                if (resultsDiv) resultsDiv.innerHTML = '';
+                
                 document.getElementById('searchStats').style.display = 'none';
                 document.getElementById('apiWarning').style.display = 'none';
                 
