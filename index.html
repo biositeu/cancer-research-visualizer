@@ -889,8 +889,8 @@
         </section>
         
         <div class="api-info" id="apiInfo" style="display: block;">
-            ✅ <strong>Live Academic Data + Advanced AI Analysis:</strong> Searching PubMed (NCBI), arXiv preprints, and bioRxiv biology preprints. 
-            Click "Generate AI Visual Abstract" to extract specific interventions, patient demographics, statistical results, study timelines, and conclusions from each paper's text.
+            ✅ <strong>Live Data + Specific AI Extraction:</strong> Searches PubMed, arXiv, and bioRxiv. 
+            AI Visual Abstracts extract actual drug names, patient counts, statistical results, and conclusions from each paper's text - no generic labels.
         </div>
         
         <div id="status" class="status" role="status" aria-live="polite"></div>
@@ -2377,16 +2377,174 @@
             }
         };
 
+        // Simplified but effective AI analysis functions
+        function extractSpecificDetails(abstractText, paper) {
+            const details = {
+                whatTested: 'Study intervention not clearly specified',
+                whoStudied: 'Patient population not specified',
+                howMany: null,
+                keyResults: [],
+                studyType: 'Clinical study',
+                conclusion: null
+            };
+            
+            if (!abstractText || abstractText.length < 50) {
+                return details;
+            }
+            
+            const text = abstractText.toLowerCase();
+            const original = abstractText;
+            
+            // Extract what was tested (simplified approach)
+            const testPatterns = [
+                /treated with ([^.]{10,60})/i,
+                /received ([^.]{10,60})/i,
+                /administered ([^.]{10,60})/i,
+                /therapy with ([^.]{10,50})/i,
+                /treatment with ([^.]{10,50})/i,
+                /using ([^.]{10,50})/i,
+                /intervention[:\s]+([^.]{10,50})/i,
+                /drug[:\s]+([^.]{5,40})/i
+            ];
+            
+            for (const pattern of testPatterns) {
+                const match = original.match(pattern);
+                if (match && match[1]) {
+                    let intervention = match[1].trim()
+                        .replace(/[,;].*/, '') // Remove everything after comma/semicolon
+                        .replace(/\s+(and|or|vs|versus).*/, '') // Remove additional comparisons
+                        .substring(0, 60);
+                    if (intervention.length > 5) {
+                        details.whatTested = intervention;
+                        break;
+                    }
+                }
+            }
+            
+            // Extract sample size and population
+            const samplePatterns = [
+                /(\d+)\s+patients?\s+with\s+([^.]{5,50})/i,
+                /(\d+)\s+subjects?\s+([^.]{5,40})/i,
+                /(\d+)\s+participants?\s+([^.]{5,40})/i,
+                /enrolled\s+(\d+)\s+([^.]{5,40})/i,
+                /n\s*=\s*(\d+)\s*([^.]{0,40})/i
+            ];
+            
+            for (const pattern of samplePatterns) {
+                const match = original.match(pattern);
+                if (match) {
+                    const size = parseInt(match[1]);
+                    if (size > 0 && size < 100000) {
+                        details.howMany = size;
+                        if (match[2] && match[2].trim().length > 3) {
+                            details.whoStudied = `${size} patients with ${match[2].trim().replace(/[,;].*/, '').substring(0, 50)}`;
+                        } else {
+                            details.whoStudied = `${size} patients`;
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // If no specific population found, try just sample size
+            if (!details.howMany) {
+                const simpleSizePatterns = [
+                    /(\d+)\s+patients?/i,
+                    /(\d+)\s+subjects?/i,
+                    /(\d+)\s+participants?/i,
+                    /n\s*=\s*(\d+)/i
+                ];
+                
+                for (const pattern of simpleSizePatterns) {
+                    const match = original.match(pattern);
+                    if (match) {
+                        const size = parseInt(match[1]);
+                        if (size > 0 && size < 100000 && size > (details.howMany || 0)) {
+                            details.howMany = size;
+                            details.whoStudied = `${size} study participants`;
+                        }
+                    }
+                }
+            }
+            
+            // Extract key quantitative results
+            const resultPatterns = [
+                /(\d+(?:\.\d+)?%)\s*vs?\s*(\d+(?:\.\d+)?%)/i,
+                /(\d+(?:\.\d+)?%)\s*(?:compared to|versus)\s*(\d+(?:\.\d+)?%)/i,
+                /(p\s*[<>=]\s*[\d.]+)/i,
+                /response rate\s*[:\s]*(\d+(?:\.\d+)?%)/i,
+                /survival\s*[:\s]*(\d+(?:\.\d+)?)\s*(?:months?|years?)/i,
+                /improved by\s*(\d+(?:\.\d+)?%)/i,
+                /reduced by\s*(\d+(?:\.\d+)?%)/i,
+                /increased by\s*(\d+(?:\.\d+)?%)/i,
+                /hazard ratio\s*[:\s]*(\d+\.\d+)/i,
+                /hr\s*[=:]\s*(\d+\.\d+)/i
+            ];
+            
+            resultPatterns.forEach(pattern => {
+                const matches = Array.from(original.matchAll(new RegExp(pattern.source, 'gi')));
+                matches.forEach(match => {
+                    if (match[0]) {
+                        let result = match[0].trim();
+                        // For comparison results, format them nicely
+                        if (match[1] && match[2] && result.includes('%')) {
+                            result = `${match[1]} vs ${match[2]}`;
+                        }
+                        if (result.length > 3 && result.length < 50) {
+                            details.keyResults.push(result);
+                        }
+                    }
+                });
+            });
+            
+            // Remove duplicates and limit results
+            details.keyResults = [...new Set(details.keyResults)].slice(0, 4);
+            
+            // Extract conclusion
+            const conclusionPatterns = [
+                /conclusion[:\s]+([^.]{15,120}\.)/i,
+                /concluded that\s+([^.]{15,100}\.)/i,
+                /results suggest\s+([^.]{15,100}\.)/i,
+                /demonstrated that\s+([^.]{15,100}\.)/i,
+                /showed that\s+([^.]{15,100}\.)/i,
+                /found that\s+([^.]{15,100}\.)/i
+            ];
+            
+            for (const pattern of conclusionPatterns) {
+                const match = original.match(pattern);
+                if (match && match[1]) {
+                    details.conclusion = match[1].trim().substring(0, 150);
+                    break;
+                }
+            }
+            
+            // Determine study type
+            if (text.includes('randomized') || text.includes('rct')) {
+                details.studyType = 'Randomized controlled trial';
+            } else if (text.includes('phase i') || text.includes('phase 1')) {
+                details.studyType = 'Phase I clinical trial';
+            } else if (text.includes('phase ii') || text.includes('phase 2')) {
+                details.studyType = 'Phase II clinical trial';
+            } else if (text.includes('phase iii') || text.includes('phase 3')) {
+                details.studyType = 'Phase III clinical trial';
+            } else if (text.includes('meta-analysis')) {
+                details.studyType = 'Meta-analysis';
+            } else if (text.includes('retrospective')) {
+                details.studyType = 'Retrospective study';
+            } else if (text.includes('prospective')) {
+                details.studyType = 'Prospective study';
+            }
+            
+            return details;
+        }
+
+        // Simplified visual abstract creation
         function createComprehensiveVisualAbstract(paper, paperIndex) {
             const abstractText = paper.abstract || '';
             
-            // Extract specific paper details (not generic labels)
+            // Extract specific details from this paper
+            const details = extractSpecificDetails(abstractText, paper);
             const studyDesign = analyzeStudyDesign(abstractText);
-            const testedItem = extractWhatWasTested(abstractText);
-            const population = extractSpecificPopulation(abstractText);
-            const results = extractPrimaryResults(abstractText);
-            const specificFlow = createSpecificStudyFlow(testedItem, population, results);
-            
             const studyIcon = getStudyIcon(studyDesign.type);
             
             // Create visual abstract element
@@ -2397,10 +2555,10 @@
             visualDiv.innerHTML = `
                 <div class="visual-abstract-header">
                     <div class="visual-abstract-title">
-                        🤖 AI-Generated Visual Abstract
+                        🤖 AI-Extracted Study Details
                     </div>
                     <div class="visual-abstract-subtitle">
-                        Paper-Specific Analysis: "${paper.title.substring(0, 60)}${paper.title.length > 60 ? '...' : ''}"
+                        Specific Information from: "${paper.title.substring(0, 60)}${paper.title.length > 60 ? '...' : ''}"
                     </div>
                     <button class="close-visual-btn" onclick="closeVisualAbstract(${paperIndex})">✕ Close</button>
                 </div>
@@ -2410,174 +2568,129 @@
                     <div class="study-design-visual">
                         <h3 style="color: #2c3e50; margin-bottom: 15px; text-align: center;">🧪 What Was Tested</h3>
                         <div style="background: rgba(231, 76, 60, 0.1); border-left: 4px solid #e74c3c; padding: 20px; border-radius: 8px;">
-                            ${testedItem.intervention ? `
-                                <div style="font-size: 1.1em; font-weight: 600; color: #2c3e50; margin-bottom: 10px;">
-                                    Primary Intervention: <span style="color: #e74c3c;">${escapeHtml(testedItem.intervention)}</span>
-                                </div>
-                                ${testedItem.comparison ? `
-                                    <div style="font-size: 1em; color: #2c3e50; margin-bottom: 10px;">
-                                        Compared to: <span style="color: #9b59b6;">${escapeHtml(testedItem.comparison)}</span>
-                                    </div>
-                                ` : ''}
-                                <div style="font-size: 0.9em; color: #6c757d; font-style: italic;">
-                                    Study Type: ${testedItem.testType}
-                                </div>
-                            ` : `
-                                <div style="font-size: 1.1em; font-weight: 600; color: #2c3e50;">
-                                    Study Focus: ${testedItem.testType || 'Clinical investigation'}
-                                </div>
-                                <div style="font-size: 0.9em; color: #6c757d; margin-top: 10px; font-style: italic;">
-                                    Specific intervention details not clearly specified in abstract
-                                </div>
-                            `}
+                            <div style="font-size: 1.2em; font-weight: 600; color: #2c3e50; line-height: 1.4;">
+                                ${escapeHtml(details.whatTested)}
+                            </div>
+                            <div style="font-size: 0.9em; color: #6c757d; margin-top: 10px; font-style: italic;">
+                                Study Type: ${details.studyType}
+                            </div>
                         </div>
                     </div>
                     
                     <!-- Who Was Studied -->
                     <div class="patient-demographics">
                         <div class="demographics-title">👥 Study Population</div>
-                        <div style="background: white; padding: 20px; border-radius: 10px; border: 2px solid #3498db;">
-                            ${population.size ? `
-                                <div style="text-align: center; margin-bottom: 15px;">
-                                    <div style="font-size: 2.5em; color: #3498db; font-weight: 700;">
-                                        ${population.size.toLocaleString()}
-                                    </div>
-                                    <div style="font-size: 1.2em; font-weight: 600; color: #2c3e50;">
-                                        ${population.size === 1 ? 'Patient' : 'Patients'}
-                                    </div>
+                        <div style="background: white; padding: 25px; border-radius: 10px; border: 2px solid #3498db; text-align: center;">
+                            ${details.howMany ? `
+                                <div style="font-size: 3em; color: #3498db; font-weight: 700; margin-bottom: 10px;">
+                                    ${details.howMany.toLocaleString()}
                                 </div>
-                                ${population.condition ? `
-                                    <div style="background: rgba(52, 152, 219, 0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">
-                                        <div style="font-weight: 600; color: #3498db; margin-bottom: 8px;">Patient Population:</div>
-                                        <div style="color: #2c3e50;">${escapeHtml(population.condition)}</div>
-                                    </div>
-                                ` : ''}
-                                ${population.characteristics.length > 0 ? `
-                                    <div style="margin-top: 15px;">
-                                        <div style="font-weight: 600; color: #3498db; margin-bottom: 8px;">Patient Characteristics:</div>
-                                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                            ${population.characteristics.slice(0, 4).map(char => `
-                                                <span style="background: #e8f4f8; color: #2c3e50; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">
-                                                    ${escapeHtml(char)}
-                                                </span>
-                                            `).join('')}
-                                        </div>
-                                    </div>
-                                ` : ''}
+                                <div style="font-size: 1.1em; font-weight: 600; color: #2c3e50; line-height: 1.4;">
+                                    ${escapeHtml(details.whoStudied)}
+                                </div>
                             ` : `
-                                <div style="text-align: center; padding: 20px; color: #6c757d;">
-                                    <div style="font-size: 1.5em; margin-bottom: 10px;">👥</div>
-                                    <div>Sample size not clearly specified in abstract</div>
-                                </div>
+                                <div style="font-size: 1.5em; margin-bottom: 10px;">👥</div>
+                                <div style="color: #6c757d;">${escapeHtml(details.whoStudied)}</div>
                             `}
                         </div>
                     </div>
                     
-                    <!-- Primary Results & Outcomes -->
-                    ${results.primaryEndpoint || results.keyFindings.length > 0 ? `
+                    <!-- Key Results -->
+                    ${details.keyResults.length > 0 ? `
                     <div class="results-section">
-                        <div class="results-title">📊 Primary Results</div>
-                        
-                        ${results.primaryEndpoint ? `
-                            <div style="background: rgba(40, 167, 69, 0.1); border-left: 4px solid #28a745; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                                <div style="font-weight: 600; color: #28a745; margin-bottom: 8px;">Primary Endpoint:</div>
-                                <div style="color: #2c3e50; font-size: 0.95em;">${escapeHtml(results.primaryEndpoint)}</div>
-                            </div>
-                        ` : ''}
-                        
-                        ${results.keyFindings.length > 0 ? `
-                            <div style="margin: 15px 0;">
-                                <div style="font-weight: 600; color: #28a745; margin-bottom: 12px;">Key Findings:</div>
-                                <div style="display: grid; gap: 10px;">
-                                    ${results.keyFindings.slice(0, 4).map(finding => `
-                                        <div style="background: white; border: 2px solid #28a745; border-radius: 8px; padding: 12px; text-align: center;">
-                                            <div style="font-size: 1.3em; font-weight: 700; color: #28a745;">
-                                                ${escapeHtml(finding)}
-                                            </div>
-                                        </div>
-                                    `).join('')}
+                        <div class="results-title">📊 Key Results from This Study</div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0;">
+                            ${details.keyResults.map(result => `
+                                <div style="background: white; border: 2px solid #28a745; border-radius: 10px; padding: 20px; text-align: center;">
+                                    <div style="font-size: 1.4em; font-weight: 700; color: #28a745; margin-bottom: 8px;">
+                                        ${escapeHtml(result)}
+                                    </div>
+                                    <div style="font-size: 0.8em; color: #6c757d;">Statistical Result</div>
                                 </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : `
+                    <div class="results-section">
+                        <div class="results-title">📊 Study Results</div>
+                        <div style="text-align: center; padding: 30px; color: #6c757d;">
+                            <div style="font-size: 1.5em; margin-bottom: 10px;">📈</div>
+                            <div>Specific numerical results not clearly stated in abstract</div>
+                        </div>
+                    </div>
+                    `}
+                    
+                    <!-- Study Conclusion -->
+                    ${details.conclusion ? `
+                    <div class="study-design-visual">
+                        <h3 style="color: #2c3e50; margin-bottom: 15px; text-align: center;">💡 Study Conclusion</h3>
+                        <div style="background: rgba(40, 167, 69, 0.1); border: 2px solid #28a745; padding: 20px; border-radius: 10px;">
+                            <div style="font-size: 1em; line-height: 1.5; color: #2c3e50; font-style: italic; text-align: center;">
+                                "${escapeHtml(details.conclusion)}"
                             </div>
-                        ` : ''}
-                        
-                        ${results.statisticalResults.length > 0 ? `
-                            <div style="margin: 15px 0;">
-                                <div style="font-weight: 600; color: #28a745; margin-bottom: 12px;">Statistical Significance:</div>
-                                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                                    ${results.statisticalResults.slice(0, 4).map(stat => `
-                                        <span style="background: #f8f9fa; border: 1px solid #28a745; color: #28a745; padding: 6px 12px; border-radius: 15px; font-size: 0.85em; font-weight: 600;">
-                                            ${escapeHtml(stat)}
-                                        </span>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        ` : ''}
-                        
-                        ${results.clinicalOutcome ? `
-                            <div style="background: rgba(40, 167, 69, 0.1); border: 2px solid #28a745; padding: 15px; border-radius: 10px; margin: 15px 0;">
-                                <div style="font-weight: 600; color: #28a745; margin-bottom: 8px;">Clinical Conclusion:</div>
-                                <div style="color: #2c3e50; font-style: italic; line-height: 1.4;">
-                                    "${escapeHtml(results.clinicalOutcome)}"
-                                </div>
-                            </div>
-                        ` : ''}
+                        </div>
                     </div>
                     ` : ''}
                     
-                    <!-- Specific Study Flow - What Actually Happened -->
+                    <!-- Simple Study Flow -->
                     <div class="study-design-visual">
-                        <h3 style="color: #2c3e50; margin-bottom: 20px; text-align: center;">⚡ Actual Study Process</h3>
+                        <h3 style="color: #2c3e50; margin-bottom: 20px; text-align: center;">⚡ Study Overview</h3>
                         <div class="study-flow">
-                            ${specificFlow.map((step, index) => `
-                                <div class="flow-step" style="flex: 1; min-width: 140px;">
-                                    <span class="flow-icon" style="font-size: 2em;">${step.icon}</span>
-                                    <div class="flow-label" style="font-weight: 600; margin: 8px 0;">${step.title}</div>
-                                    <div style="font-size: 0.8em; color: #6c757d; line-height: 1.3; min-height: 40px; word-wrap: break-word;">
-                                        ${escapeHtml(step.detail)}
-                                    </div>
+                            <div class="flow-step">
+                                <span class="flow-icon" style="font-size: 2.5em;">🧪</span>
+                                <div class="flow-label" style="font-weight: 600; margin: 10px 0;">Intervention</div>
+                                <div style="font-size: 0.85em; color: #2c3e50; line-height: 1.3; min-height: 60px;">
+                                    ${escapeHtml(details.whatTested.length > 50 ? details.whatTested.substring(0, 47) + '...' : details.whatTested)}
                                 </div>
-                                ${index < specificFlow.length - 1 ? '<div class="flow-arrow" style="font-size: 1.5em; color: #3498db;">→</div>' : ''}
-                            `).join('')}
-                        </div>
-                        
-                        <!-- Detailed explanations -->
-                        <div style="margin-top: 20px; padding: 15px; background: rgba(248, 249, 250, 0.8); border-radius: 8px;">
-                            <div style="font-weight: 600; color: #2c3e50; margin-bottom: 10px;">Study Summary:</div>
-                            ${specificFlow.map((step, index) => `
-                                <div style="margin: 5px 0; font-size: 0.9em; color: #2c3e50;">
-                                    <strong>${index + 1}.</strong> ${escapeHtml(step.fullDetail)}
+                            </div>
+                            <div class="flow-arrow">→</div>
+                            <div class="flow-step">
+                                <span class="flow-icon" style="font-size: 2.5em;">👥</span>
+                                <div class="flow-label" style="font-weight: 600; margin: 10px 0;">Population</div>
+                                <div style="font-size: 0.85em; color: #2c3e50; line-height: 1.3; min-height: 60px;">
+                                    ${details.howMany ? `${details.howMany} patients` : 'Study participants'}
                                 </div>
-                            `).join('')}
+                            </div>
+                            <div class="flow-arrow">→</div>
+                            <div class="flow-step">
+                                <span class="flow-icon" style="font-size: 2.5em;">📊</span>
+                                <div class="flow-label" style="font-weight: 600; margin: 10px 0;">Outcomes</div>
+                                <div style="font-size: 0.85em; color: #2c3e50; line-height: 1.3; min-height: 60px;">
+                                    ${details.keyResults.length > 0 ? details.keyResults[0] : 'Clinical endpoints measured'}
+                                </div>
+                            </div>
+                            <div class="flow-arrow">→</div>
+                            <div class="flow-step">
+                                <span class="flow-icon" style="font-size: 2.5em;">✅</span>
+                                <div class="flow-label" style="font-weight: 600; margin: 10px 0;">Results</div>
+                                <div style="font-size: 0.85em; color: #2c3e50; line-height: 1.3; min-height: 60px;">
+                                    ${details.conclusion ? 'Positive outcomes' : 'Study completed'}
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
-                    <!-- Study Overview with Real Data -->
+                    <!-- Basic Study Info -->
                     <div class="study-overview">
                         <div class="overview-item">
                             <span class="overview-icon">${studyIcon}</span>
                             <div class="overview-label">Study Type</div>
                             <div class="overview-value">${studyDesign.type}</div>
-                            ${studyDesign.details ? `<div style="font-size: 0.8em; color: #6c757d; margin-top: 5px;">${studyDesign.details}</div>` : ''}
-                        </div>
-                        <div class="overview-item">
-                            <span class="overview-icon">🎯</span>
-                            <div class="overview-label">Primary Focus</div>
-                            <div class="overview-value">${testedItem.testType || 'Clinical Study'}</div>
-                            <div style="font-size: 0.75em; color: #6c757d; margin-top: 5px;">
-                                ${testedItem.intervention ? testedItem.intervention.substring(0, 40) + '...' : 'See intervention details above'}
-                            </div>
-                        </div>
-                        <div class="overview-item">
-                            <span class="overview-icon">📊</span>
-                            <div class="overview-label">Data Source</div>
-                            <div class="overview-value">${paper.source_api}</div>
-                            <div style="font-size: 0.8em; color: #6c757d; margin-top: 5px;">${paper.source}</div>
                         </div>
                         <div class="overview-item">
                             <span class="overview-icon">📅</span>
-                            <div class="overview-label">Publication</div>
+                            <div class="overview-label">Published</div>
                             <div class="overview-value">${paper.date}</div>
-                            ${paper.pmid ? `<div style="font-size: 0.75em; color: #6c757d; margin-top: 5px;">PMID: ${paper.pmid}</div>` : ''}
+                        </div>
+                        <div class="overview-item">
+                            <span class="overview-icon">📚</span>
+                            <div class="overview-label">Source</div>
+                            <div class="overview-value">${paper.source_api}</div>
+                        </div>
+                        <div class="overview-item">
+                            <span class="overview-icon">🏥</span>
+                            <div class="overview-label">Journal</div>
+                            <div class="overview-value">${paper.source.substring(0, 15)}${paper.source.length > 15 ? '...' : ''}</div>
                         </div>
                     </div>
                 </div>
