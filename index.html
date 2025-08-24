@@ -889,8 +889,8 @@
         </section>
         
         <div class="api-info" id="apiInfo" style="display: block;">
-            ✅ <strong>Live Academic Data + AI Visual Abstracts:</strong> Searching PubMed (NCBI), arXiv preprints, and bioRxiv biology preprints. 
-            Click "Generate AI Visual Abstract" on any paper for comprehensive infographic-style summaries with patient icons and study flow diagrams.
+            ✅ <strong>Live Academic Data + Advanced AI Analysis:</strong> Searching PubMed (NCBI), arXiv preprints, and bioRxiv biology preprints. 
+            Click "Generate AI Visual Abstract" to extract specific interventions, patient demographics, statistical results, study timelines, and conclusions from each paper's text.
         </div>
         
         <div id="status" class="status" role="status" aria-live="polite"></div>
@@ -1721,180 +1721,623 @@
             return highlightedText;
         }
 
-        // AI-Assisted Study Analysis Functions
+        // Advanced Paper-Specific Information Extraction
+        function extractWhatWasTested(abstractText) {
+            const details = {
+                intervention: null,
+                comparison: null,
+                testType: null
+            };
+            
+            // Look for specific interventions being tested
+            const interventionPatterns = [
+                /(?:compared|versus|vs\.?)\s+([^.]{10,80})/gi,
+                /(?:received|treated with|administered)\s+([^.]{10,60})/gi,
+                /(?:intervention|treatment|therapy)[:\s]+([^.]{10,80})/gi,
+                /(?:drug|agent|medication)[:\s]+([^.]{5,40})/gi,
+                /(?:procedure|surgery|operation)[:\s]+([^.]{10,50})/gi,
+                /(?:dose|dosage)[:\s]+([^.]{5,40})/gi
+            ];
+            
+            for (const pattern of interventionPatterns) {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                if (matches.length > 0 && matches[0][1]) {
+                    const extracted = matches[0][1].trim()
+                        .replace(/\s+(and|or|with)\s+.*/, '') // Remove additional components for clarity
+                        .replace(/[,;].*/, '') // Remove trailing clauses
+                        .substring(0, 60);
+                    if (extracted.length > 5) {
+                        details.intervention = extracted;
+                        break;
+                    }
+                }
+            }
+            
+            // Look for comparisons (control groups, placebo, standard care)
+            const comparisonPatterns = [
+                /(?:compared to|versus|vs\.?|against)\s+([^.]{10,50})/gi,
+                /(?:control|placebo|standard care|standard treatment)[:\s]*([^.]{5,40})/gi,
+                /(?:randomized to)\s+([^.]{10,60})/gi
+            ];
+            
+            for (const pattern of comparisonPatterns) {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                if (matches.length > 0 && matches[0][1]) {
+                    const extracted = matches[0][1].trim()
+                        .replace(/[,;].*/, '')
+                        .substring(0, 50);
+                    if (extracted.length > 3) {
+                        details.comparison = extracted;
+                        break;
+                    }
+                }
+            }
+            
+            // Determine what type of test this is
+            if (abstractText.toLowerCase().includes('safety') && abstractText.toLowerCase().includes('dose')) {
+                details.testType = 'Safety & Dosing Study';
+            } else if (abstractText.toLowerCase().includes('efficacy') || abstractText.toLowerCase().includes('effectiveness')) {
+                details.testType = 'Efficacy Evaluation';
+            } else if (abstractText.toLowerCase().includes('survival')) {
+                details.testType = 'Survival Analysis';
+            } else if (abstractText.toLowerCase().includes('biomarker') || abstractText.toLowerCase().includes('diagnostic')) {
+                details.testType = 'Biomarker/Diagnostic Study';
+            } else {
+                details.testType = 'Clinical Investigation';
+            }
+            
+            return details;
+        }
+
+        function extractSpecificPopulation(abstractText) {
+            const population = {
+                size: null,
+                condition: null,
+                characteristics: [],
+                eligibility: null
+            };
+            
+            // Extract sample size with more context
+            const sizePatterns = [
+                /(\d+)\s+patients?\s+with\s+([^.]{5,80})/gi,
+                /(\d+)\s+subjects?\s+(?:with|having)\s+([^.]{5,60})/gi,
+                /enrolled\s+(\d+)\s+([^.]{5,50})/gi,
+                /(\d+)\s+participants?\s+([^.]{5,60})/gi,
+                /n\s*=\s*(\d+)\s*([^.]{0,60})/gi
+            ];
+            
+            for (const pattern of sizePatterns) {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                if (matches.length > 0) {
+                    const size = parseInt(matches[0][1]);
+                    if (size > (population.size || 0) && size < 100000) {
+                        population.size = size;
+                        if (matches[0][2] && matches[0][2].trim().length > 3) {
+                            population.condition = matches[0][2].trim()
+                                .replace(/[,;].*/, '')
+                                .replace(/\s+(were|who|that).*/, '')
+                                .substring(0, 60);
+                        }
+                    }
+                }
+            }
+            
+            // Extract specific patient characteristics
+            const charPatterns = [
+                /(?:median age|mean age)[:\s]*(\d+(?:\.\d+)?(?:\s*[±]\s*\d+)?)/gi,
+                /age[:\s]*(\d+(?:\.\d+)?(?:\s*to\s*\d+)?)\s*years?/gi,
+                /(\d+(?:\.\d+)?%?)\s*(?:were\s+)?(?:male|female|men|women)/gi,
+                /stage\s+(i{1,3}|iv|1|2|3|4)\s*(?:to\s+(?:i{1,3}|iv|1|2|3|4))?/gi,
+                /grade\s+(\d|low|high|well|poor)/gi,
+                /(?:metastatic|advanced|locally advanced|early stage)/gi
+            ];
+            
+            charPatterns.forEach(pattern => {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                matches.forEach(match => {
+                    if (match[0] && match[0].length > 3) {
+                        population.characteristics.push(match[0].trim());
+                    }
+                });
+            });
+            
+            return population;
+        }
+
+        function extractPrimaryResults(abstractText) {
+            const results = {
+                primaryEndpoint: null,
+                keyFindings: [],
+                statisticalResults: [],
+                clinicalOutcome: null
+            };
+            
+            // Extract primary endpoint
+            const primaryPatterns = [
+                /primary\s+(?:endpoint|outcome)[:\s]*([^.]{10,100})/gi,
+                /primary\s+objective[:\s]*([^.]{10,80})/gi,
+                /main\s+outcome[:\s]*([^.]{10,80})/gi
+            ];
+            
+            for (const pattern of primaryPatterns) {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                if (matches.length > 0 && matches[0][1]) {
+                    results.primaryEndpoint = matches[0][1].trim()
+                        .replace(/[,;].*/, '')
+                        .substring(0, 80);
+                    break;
+                }
+            }
+            
+            // Extract key quantitative findings
+            const findingPatterns = [
+                /(\d+(?:\.\d+)?%)\s+(?:vs\.?|versus|compared to)\s+(\d+(?:\.\d+)?%)/gi,
+                /(?:improved|increased|decreased|reduced)\s+by\s+(\d+(?:\.\d+)?%)/gi,
+                /(?:response rate|survival rate|success rate)[:\s]*(\d+(?:\.\d+)?%)/gi,
+                /(\d+(?:\.\d+)?)\s+(?:months?|years?)\s+(?:vs\.?|versus)\s+(\d+(?:\.\d+)?)\s+(?:months?|years?)/gi,
+                /hazard ratio[:\s]*(\d+\.\d+)/gi,
+                /odds ratio[:\s]*(\d+\.\d+)/gi
+            ];
+            
+            findingPatterns.forEach(pattern => {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                matches.forEach(match => {
+                    if (match[0] && match[0].length > 3) {
+                        results.keyFindings.push(match[0].trim());
+                    }
+                });
+            });
+            
+            // Extract statistical significance
+            const statPatterns = [
+                /(p\s*[<>=]\s*[\d.]+)/gi,
+                /(95%\s*ci[:\s]*[\d.\-,\s]+)/gi,
+                /(?:significant|significantly)\s+([^.]{5,50})/gi
+            ];
+            
+            statPatterns.forEach(pattern => {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                matches.forEach(match => {
+                    if (match[1] || match[0]) {
+                        const result = (match[1] || match[0]).trim().substring(0, 50);
+                        if (result.length > 2) {
+                            results.statisticalResults.push(result);
+                        }
+                    }
+                });
+            });
+            
+            // Extract overall clinical outcome/conclusion
+            const outcomePatterns = [
+                /(?:conclusion|concluded)[:\s]*([^.]{15,120}\.)/gi,
+                /(?:demonstrated|showed|found)\s+that\s+([^.]{15,100}\.)/gi,
+                /(?:results suggest|findings indicate)\s+([^.]{15,100}\.)/gi
+            ];
+            
+            for (const pattern of outcomePatterns) {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                if (matches.length > 0 && matches[0][1]) {
+                    results.clinicalOutcome = matches[0][1].trim()
+                        .substring(0, 120);
+                    break;
+                }
+            }
+            
+            return results;
+        }
+
+        // Study design analysis (keep this for basic study type detection)
         function analyzeStudyDesign(abstractText) {
             const text = abstractText.toLowerCase();
             
-            // Detect study type
+            // Detect study type with more specificity
             let studyType = 'Observational Study';
-            if (text.includes('randomized') || text.includes('rct') || text.includes('clinical trial')) {
+            let studyDetails = '';
+            
+            if (text.includes('randomized controlled trial') || text.includes('rct')) {
                 studyType = 'Randomized Controlled Trial';
+                if (text.includes('double-blind') || text.includes('double blind')) {
+                    studyDetails = 'Double-blind RCT';
+                } else if (text.includes('single-blind') || text.includes('single blind')) {
+                    studyDetails = 'Single-blind RCT';
+                } else if (text.includes('open-label') || text.includes('open label')) {
+                    studyDetails = 'Open-label RCT';
+                }
+            } else if (text.includes('phase i') || text.includes('phase 1')) {
+                studyType = 'Phase I Clinical Trial';
+                studyDetails = 'Safety and dosage study';
+            } else if (text.includes('phase ii') || text.includes('phase 2')) {
+                studyType = 'Phase II Clinical Trial';
+                studyDetails = 'Efficacy evaluation';
+            } else if (text.includes('phase iii') || text.includes('phase 3')) {
+                studyType = 'Phase III Clinical Trial';
+                studyDetails = 'Large-scale efficacy trial';
             } else if (text.includes('prospective')) {
                 studyType = 'Prospective Study';
+                if (text.includes('cohort')) studyDetails = 'Prospective cohort study';
             } else if (text.includes('retrospective')) {
                 studyType = 'Retrospective Study';
-            } else if (text.includes('cross-sectional')) {
-                studyType = 'Cross-sectional Study';
-            } else if (text.includes('meta-analysis') || text.includes('systematic review')) {
+                if (text.includes('cohort')) studyDetails = 'Retrospective cohort analysis';
+            } else if (text.includes('meta-analysis')) {
                 studyType = 'Meta-Analysis';
+                // Extract number of studies if mentioned
+                const studyMatch = abstractText.match(/(\d+)\s*studies?/i);
+                if (studyMatch) studyDetails = `Analysis of ${studyMatch[1]} studies`;
+            } else if (text.includes('systematic review')) {
+                studyType = 'Systematic Review';
+                studyDetails = 'Evidence synthesis';
             } else if (text.includes('case-control')) {
                 studyType = 'Case-Control Study';
-            } else if (text.includes('cohort')) {
-                studyType = 'Cohort Study';
+                studyDetails = 'Retrospective comparison study';
             }
             
-            return studyType;
+            return { type: studyType, details: studyDetails };
         }
 
-        function extractSampleSize(abstractText) {
-            // Look for patient/subject numbers
+        function createSpecificStudyFlow(testedItem, population, results) {
+            const flowSteps = [];
+            
+            // Step 1: What was studied
+            if (testedItem.intervention) {
+                flowSteps.push({
+                    icon: '🧪',
+                    title: 'Tested',
+                    detail: testedItem.intervention.substring(0, 35) + (testedItem.intervention.length > 35 ? '...' : ''),
+                    fullDetail: `Testing: ${testedItem.intervention}${testedItem.comparison ? ` vs ${testedItem.comparison}` : ''}`
+                });
+            } else {
+                flowSteps.push({
+                    icon: '🔬',
+                    title: 'Study Focus',
+                    detail: testedItem.testType || 'Clinical investigation',
+                    fullDetail: 'Clinical research study'
+                });
+            }
+            
+            // Step 2: Population studied
+            if (population.size && population.condition) {
+                flowSteps.push({
+                    icon: '👥',
+                    title: 'Population',
+                    detail: `${population.size} patients`,
+                    fullDetail: `${population.size.toLocaleString()} patients with ${population.condition}`
+                });
+            } else if (population.size) {
+                flowSteps.push({
+                    icon: '👥',
+                    title: 'Sample Size',
+                    detail: `${population.size} participants`,
+                    fullDetail: `Study enrolled ${population.size.toLocaleString()} participants`
+                });
+            } else {
+                flowSteps.push({
+                    icon: '👥',
+                    title: 'Patients',
+                    detail: 'Clinical population',
+                    fullDetail: 'Patient population studied'
+                });
+            }
+            
+            // Step 3: Primary outcome measured
+            if (results.primaryEndpoint) {
+                flowSteps.push({
+                    icon: '🎯',
+                    title: 'Measured',
+                    detail: results.primaryEndpoint.substring(0, 30) + (results.primaryEndpoint.length > 30 ? '...' : ''),
+                    fullDetail: `Primary endpoint: ${results.primaryEndpoint}`
+                });
+            } else {
+                flowSteps.push({
+                    icon: '📊',
+                    title: 'Outcomes',
+                    detail: 'Clinical endpoints',
+                    fullDetail: 'Clinical outcomes assessed'
+                });
+            }
+            
+            // Step 4: Key result
+            if (results.keyFindings.length > 0) {
+                const topFinding = results.keyFindings[0];
+                flowSteps.push({
+                    icon: '📈',
+                    title: 'Result',
+                    detail: topFinding.substring(0, 25) + (topFinding.length > 25 ? '...' : ''),
+                    fullDetail: `Key finding: ${topFinding}`
+                });
+            } else if (results.clinicalOutcome) {
+                flowSteps.push({
+                    icon: '✅',
+                    title: 'Outcome',
+                    detail: results.clinicalOutcome.substring(0, 30) + '...',
+                    fullDetail: results.clinicalOutcome
+                });
+            } else {
+                flowSteps.push({
+                    icon: '📋',
+                    title: 'Analysis',
+                    detail: 'Statistical evaluation',
+                    fullDetail: 'Data analysis conducted'
+                });
+            }
+            
+            return flowSteps;
+        }
+
+        function extractDetailedSampleInfo(abstractText) {
+            const text = abstractText.toLowerCase();
+            let sampleSize = null;
+            let demographics = {};
+            let inclusion = '';
+            
+            // Extract sample size with more context
             const patterns = [
-                /(\d+)\s*patients?/gi,
-                /(\d+)\s*subjects?/gi,
-                /(\d+)\s*participants?/gi,
-                /(\d+)\s*cases?/gi,
-                /n\s*=\s*(\d+)/gi,
-                /(\d+)\s*individuals?/gi
+                /(\d+)\s*patients?\s+with\s+([^.]{5,50})/gi,
+                /(\d+)\s*subjects?\s+([^.]{5,40})/gi,
+                /(\d+)\s*participants?\s+([^.]{5,40})/gi,
+                /enrolled\s+(\d+)\s*([^.]{5,40})/gi,
+                /n\s*=\s*(\d+)\s*([^.]{5,40})/gi
             ];
             
-            let maxSize = 0;
             patterns.forEach(pattern => {
-                const matches = abstractText.match(pattern);
-                if (matches) {
-                    matches.forEach(match => {
-                        const number = parseInt(match.replace(/\D/g, ''));
-                        if (number > maxSize && number < 100000) { // Reasonable upper limit
-                            maxSize = number;
-                        }
-                    });
-                }
+                const matches = Array.from(abstractText.matchAll(pattern));
+                matches.forEach(match => {
+                    const number = parseInt(match[1]);
+                    if (number > (sampleSize || 0) && number < 100000) {
+                        sampleSize = number;
+                        inclusion = match[2] ? match[2].trim().replace(/[,;].*/, '') : '';
+                    }
+                });
             });
             
-            return maxSize > 0 ? maxSize : null;
+            // Extract age information
+            const ageMatch = abstractText.match(/(?:age[ds]?|years?)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*[±\-]\s*(\d+(?:\.\d+)?)|(\d+)\s*to\s*(\d+)\s*years?|median\s*age\s*[:\-]?\s*(\d+)/gi);
+            if (ageMatch && ageMatch[0]) {
+                demographics.age = ageMatch[0].replace(/[^\d\-±\.to\s]/gi, '').trim();
+            }
+            
+            // Extract gender information
+            const genderMatch = abstractText.match(/(\d+(?:\.\d+)?%?)\s*(?:were\s+)?(?:male|men)|(\d+(?:\.\d+)?%?)\s*(?:were\s+)?(?:female|women)/gi);
+            if (genderMatch) {
+                demographics.gender = genderMatch.join(', ');
+            }
+            
+            return { 
+                size: sampleSize, 
+                demographics: demographics,
+                inclusion: inclusion.length > 5 ? inclusion.substring(0, 80) + '...' : inclusion
+            };
         }
 
-        function extractStatistics(abstractText) {
-            const stats = [];
-            
-            // P-values
-            const pValues = abstractText.match(/p\s*[<>=]\s*[\d.]+/gi);
-            if (pValues) stats.push(...pValues.slice(0, 3));
-            
-            // Percentages
-            const percentages = abstractText.match(/\d+\.?\d*\s*%/g);
-            if (percentages) stats.push(...percentages.slice(0, 3));
-            
-            // Confidence intervals
-            const cis = abstractText.match(/\d+\.?\d*\s*%\s*ci/gi);
-            if (cis) stats.push(...cis.slice(0, 2));
-            
-            // Hazard ratios, odds ratios
-            const ratios = abstractText.match(/(hr|or|rr)\s*[=:]\s*[\d.]+/gi);
-            if (ratios) stats.push(...ratios.slice(0, 2));
-            
-            return stats;
-        }
-
-        function extractObjective(abstractText) {
+        function extractDetailedInterventions(abstractText) {
+            const interventions = [];
             const text = abstractText.toLowerCase();
             
-            // Common objective patterns
+            // Look for specific treatments, drugs, procedures
+            const treatmentPatterns = [
+                /(?:treated with|received|administered)\s+([^.]{10,60})/gi,
+                /(?:intervention|treatment|therapy)[:\-]?\s+([^.]{10,60})/gi,
+                /(?:drug|medication|agent)[:\-]?\s+([^.]{5,40})/gi,
+                /(?:surgery|procedure|operation)[:\-]?\s+([^.]{5,40})/gi,
+                /(?:dose|dosage)[:\-]?\s+([^.]{5,30})/gi
+            ];
+            
+            treatmentPatterns.forEach(pattern => {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                matches.forEach(match => {
+                    if (match[1]) {
+                        let intervention = match[1].trim()
+                            .replace(/[,;].*/, '')
+                            .replace(/\s+(and|or|versus|vs\.?)\s+.*/, '')
+                            .substring(0, 50);
+                        if (intervention.length > 5 && !interventions.includes(intervention)) {
+                            interventions.push(intervention);
+                        }
+                    }
+                });
+            });
+            
+            return interventions.slice(0, 3);
+        }
+
+        function extractDetailedOutcomes(abstractText) {
+            const outcomes = [];
+            
+            // Look for specific endpoints and outcomes
+            const outcomePatterns = [
+                /(?:primary endpoint|primary outcome)[:\-]?\s+([^.]{10,80})/gi,
+                /(?:secondary endpoint|secondary outcome)[:\-]?\s+([^.]{10,60})/gi,
+                /(?:overall survival|progression-free survival|response rate|safety|efficacy)[:\-]?\s+([^.]{5,50})/gi,
+                /(?:improved|increased|decreased|reduced)\s+([^.]{10,60})/gi,
+                /(?:significantly|statistically)\s+([^.]{10,80})/gi
+            ];
+            
+            outcomePatterns.forEach(pattern => {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                matches.forEach(match => {
+                    if (match[1] || match[0]) {
+                        let outcome = (match[1] || match[0]).trim()
+                            .replace(/[,;].*/, '')
+                            .substring(0, 70);
+                        if (outcome.length > 5 && !outcomes.some(o => o.includes(outcome.substring(0, 20)))) {
+                            outcomes.push(outcome);
+                        }
+                    }
+                });
+            });
+            
+            return outcomes.slice(0, 4);
+        }
+
+        function extractDetailedStatistics(abstractText) {
+            const stats = [];
+            
+            // Extract specific statistical results with context
+            const statPatterns = [
+                /([^.]{0,30})(p\s*[<>=]\s*[\d.]+)([^.]{0,30})/gi,
+                /([^.]{0,30})(\d+(?:\.\d+)?%\s*(?:vs\.?|versus)\s*\d+(?:\.\d+)?%)([^.]{0,20})/gi,
+                /([^.]{0,30})(hr\s*[=:]\s*[\d.]+)([^.]{0,30})/gi,
+                /([^.]{0,30})(or\s*[=:]\s*[\d.]+)([^.]{0,30})/gi,
+                /([^.]{0,30})(\d+(?:\.\d+)?%\s*(?:improvement|increase|decrease|reduction))([^.]{0,20})/gi,
+                /([^.]{0,30})(95%\s*ci[:\-]?\s*[\d.\-,\s]+)([^.]{0,20})/gi
+            ];
+            
+            statPatterns.forEach(pattern => {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                matches.forEach(match => {
+                    const context = (match[1] || '').trim() + ' ' + match[2] + ' ' + (match[3] || '').trim();
+                    const cleanContext = context.trim().replace(/\s+/g, ' ').substring(0, 100);
+                    if (cleanContext.length > 10 && !stats.some(s => s.includes(match[2]))) {
+                        stats.push({
+                            value: match[2],
+                            context: cleanContext
+                        });
+                    }
+                });
+            });
+            
+            return stats.slice(0, 6);
+        }
+
+        function extractDetailedConclusions(abstractText) {
+            const conclusions = [];
+            
+            // Look for conclusion indicators
+            const conclusionPatterns = [
+                /(?:conclusion|conclusions)[:\-]?\s+([^.]{15,150}\.)/gi,
+                /(?:in conclusion|we conclude)[:\-]?\s+([^.]{15,150}\.)/gi,
+                /(?:these results|our findings)\s+([^.]{15,120}\.)/gi,
+                /(?:demonstrate|suggest|indicate)\s+that\s+([^.]{15,120}\.)/gi
+            ];
+            
+            conclusionPatterns.forEach(pattern => {
+                const matches = Array.from(abstractText.matchAll(pattern));
+                matches.forEach(match => {
+                    if (match[1]) {
+                        let conclusion = match[1].trim();
+                        if (conclusion.length > 15 && conclusion.length < 200 && !conclusions.some(c => c.includes(conclusion.substring(0, 30)))) {
+                            conclusions.push(conclusion);
+                        }
+                    }
+                });
+            });
+            
+            return conclusions.slice(0, 2);
+        }
+
+        function extractSpecificObjective(abstractText) {
+            // Look for specific objectives, aims, or hypotheses
             const objectivePatterns = [
-                /(?:objective|aim|purpose)[^.]{10,100}[.]/gi,
-                /(?:we aimed|this study)[^.]{10,80}[.]/gi,
-                /(?:hypothesis)[^.]{10,60}[.]/gi
+                /(?:objective|aim|purpose)[:\-]?\s+([^.]{15,200}\.)/gi,
+                /(?:we aimed|this study aimed)[:\-]?\s+([^.]{15,150}\.)/gi,
+                /(?:hypothesis|hypothesize)[:\-]?\s+([^.]{15,150}\.)/gi,
+                /(?:to evaluate|to assess|to investigate|to determine|to examine)\s+([^.]{15,120}\.)/gi
             ];
             
             for (const pattern of objectivePatterns) {
-                const matches = abstractText.match(pattern);
-                if (matches && matches[0]) {
-                    return matches[0].trim();
+                const matches = Array.from(abstractText.matchAll(pattern));
+                if (matches.length > 0 && matches[0][1]) {
+                    return matches[0][1].trim();
                 }
             }
             
-            // Fallback: first sentence if it seems like an objective
+            // If no specific objective found, try to extract the first meaningful sentence
             const sentences = abstractText.split('.').filter(s => s.trim().length > 20);
             if (sentences.length > 0) {
-                const firstSentence = sentences[0].trim() + '.';
-                if (firstSentence.length < 200) {
-                    return firstSentence;
+                const firstSentence = sentences[0].trim();
+                if (firstSentence.length < 200 && firstSentence.length > 20) {
+                    return firstSentence + '.';
                 }
             }
             
             return 'Study objective not clearly stated in abstract.';
         }
 
-        function generatePatientIcons(sampleSize, studyType) {
-            if (!sampleSize) return '👥 Sample size not specified';
+        function generateSpecificPatientVisualization(sampleInfo) {
+            const { size, demographics, inclusion } = sampleInfo;
             
-            const patientIcon = '🧑‍⚕️';
-            const groupIcon = '👥';
+            if (!size) return { icons: '👥 Sample size not specified', description: 'Population details not available' };
             
-            let iconDisplay = '';
-            if (sampleSize <= 10) {
-                iconDisplay = patientIcon.repeat(sampleSize);
-            } else if (sampleSize <= 100) {
-                const groups = Math.ceil(sampleSize / 10);
-                iconDisplay = groupIcon.repeat(groups) + ` (${sampleSize} patients)`;
-            } else {
-                const largeGroups = Math.ceil(sampleSize / 100);
-                iconDisplay = '🏥'.repeat(Math.min(largeGroups, 5)) + ` (${sampleSize} patients)`;
+            let description = `${size.toLocaleString()} participants`;
+            if (inclusion) {
+                description += ` with ${inclusion}`;
+            }
+            if (demographics.age) {
+                description += `, age: ${demographics.age}`;
+            }
+            if (demographics.gender) {
+                description += `, ${demographics.gender}`;
             }
             
-            return iconDisplay;
+            // Generate appropriate icons based on size
+            let icons = '';
+            if (size <= 10) {
+                icons = '🧑‍⚕️'.repeat(size);
+            } else if (size <= 50) {
+                const groups = Math.ceil(size / 5);
+                icons = '👥'.repeat(groups) + ` (${size})`;
+            } else if (size <= 500) {
+                const groups = Math.ceil(size / 25);
+                icons = '🏥'.repeat(Math.min(groups, 8)) + ` (${size.toLocaleString()})`;
+            } else {
+                const largeGroups = Math.ceil(size / 100);
+                icons = '🏢'.repeat(Math.min(largeGroups, 6)) + ` (${size.toLocaleString()})`;
+            }
+            
+            return { icons, description };
         }
 
-        function getStudyIcon(studyType) {
-            const icons = {
-                'Randomized Controlled Trial': '🎲',
-                'Prospective Study': '⏭️',
-                'Retrospective Study': '⏮️',
-                'Cross-sectional Study': '📊',
-                'Meta-Analysis': '🔬',
-                'Case-Control Study': '⚖️',
-                'Cohort Study': '👥',
-                'Observational Study': '👁️'
-            };
-            return icons[studyType] || '📋';
-        }
-
-        function generateTimelineSteps(studyType, abstractText) {
+        function generateSpecificTimeline(studyType, abstractText, interventions) {
             const steps = [];
+            const text = abstractText.toLowerCase();
             
-            // Common study phases
-            if (studyType.includes('Trial') || studyType.includes('Randomized')) {
-                steps.push(
-                    { icon: '📋', label: 'Enrollment' },
-                    { icon: '🎲', label: 'Randomization' },
-                    { icon: '💊', label: 'Intervention' },
-                    { icon: '📊', label: 'Follow-up' },
-                    { icon: '📈', label: 'Analysis' }
-                );
-            } else if (studyType.includes('Prospective')) {
-                steps.push(
-                    { icon: '👥', label: 'Recruitment' },
-                    { icon: '📝', label: 'Baseline' },
-                    { icon: '⏰', label: 'Follow-up' },
-                    { icon: '📊', label: 'Data Collection' },
-                    { icon: '📈', label: 'Analysis' }
-                );
-            } else if (studyType.includes('Retrospective')) {
-                steps.push(
-                    { icon: '📂', label: 'Data Identification' },
-                    { icon: '🔍', label: 'Chart Review' },
-                    { icon: '📊', label: 'Data Extraction' },
-                    { icon: '📈', label: 'Statistical Analysis' }
-                );
-            } else {
-                steps.push(
-                    { icon: '🎯', label: 'Planning' },
-                    { icon: '👥', label: 'Recruitment' },
-                    { icon: '📊', label: 'Data Collection' },
-                    { icon: '📈', label: 'Analysis' }
-                );
+            // Extract actual study phases mentioned in the text
+            if (text.includes('screened') || text.includes('screening')) {
+                steps.push({ icon: '🔍', label: 'Patient Screening', detail: 'Eligibility assessment' });
             }
             
-            return steps;
+            if (text.includes('enrolled') || text.includes('enrollment') || text.includes('recruited')) {
+                steps.push({ icon: '📝', label: 'Enrollment', detail: 'Patient recruitment' });
+            }
+            
+            if (text.includes('randomized') || text.includes('randomization')) {
+                steps.push({ icon: '🎲', label: 'Randomization', detail: 'Treatment assignment' });
+            }
+            
+            if (text.includes('baseline') || text.includes('pre-treatment')) {
+                steps.push({ icon: '📊', label: 'Baseline Assessment', detail: 'Initial measurements' });
+            }
+            
+            if (interventions.length > 0) {
+                steps.push({ 
+                    icon: '💊', 
+                    label: 'Intervention', 
+                    detail: interventions[0].substring(0, 30) + (interventions[0].length > 30 ? '...' : '') 
+                });
+            } else {
+                steps.push({ icon: '⚕️', label: 'Treatment Phase', detail: 'Study intervention' });
+            }
+            
+            if (text.includes('follow-up') || text.includes('monitoring')) {
+                const followUpMatch = abstractText.match(/(?:follow-up|followed)\s+for\s+([^.]{5,40})/i);
+                const followUpDetail = followUpMatch ? followUpMatch[1] : 'Patient monitoring';
+                steps.push({ icon: '⏰', label: 'Follow-up', detail: followUpDetail });
+            }
+            
+            if (text.includes('endpoint') || text.includes('outcome') || text.includes('analysis')) {
+                steps.push({ icon: '📈', label: 'Analysis', detail: 'Data evaluation' });
+            }
+            
+            // Ensure we have at least 3 steps
+            if (steps.length < 3) {
+                if (!steps.some(s => s.label.includes('Planning'))) {
+                    steps.unshift({ icon: '🎯', label: 'Study Design', detail: 'Protocol development' });
+                }
+                if (!steps.some(s => s.label.includes('Analysis'))) {
+                    steps.push({ icon: '📊', label: 'Results', detail: 'Statistical analysis' });
+                }
+            }
+            
+            return steps.slice(0, 6); // Limit to 6 steps for display
         }
 
         // Main function to generate comprehensive visual abstract
@@ -1937,14 +2380,14 @@
         function createComprehensiveVisualAbstract(paper, paperIndex) {
             const abstractText = paper.abstract || '';
             
-            // AI Analysis
-            const studyType = analyzeStudyDesign(abstractText);
-            const sampleSize = extractSampleSize(abstractText);
-            const statistics = extractStatistics(abstractText);
-            const objective = extractObjective(abstractText);
-            const patientIcons = generatePatientIcons(sampleSize, studyType);
-            const studyIcon = getStudyIcon(studyType);
-            const timelineSteps = generateTimelineSteps(studyType, abstractText);
+            // Extract specific paper details (not generic labels)
+            const studyDesign = analyzeStudyDesign(abstractText);
+            const testedItem = extractWhatWasTested(abstractText);
+            const population = extractSpecificPopulation(abstractText);
+            const results = extractPrimaryResults(abstractText);
+            const specificFlow = createSpecificStudyFlow(testedItem, population, results);
+            
+            const studyIcon = getStudyIcon(studyDesign.type);
             
             // Create visual abstract element
             const visualDiv = document.createElement('div');
@@ -1957,113 +2400,184 @@
                         🤖 AI-Generated Visual Abstract
                     </div>
                     <div class="visual-abstract-subtitle">
-                        Comprehensive Study Overview with Visual Elements
+                        Paper-Specific Analysis: "${paper.title.substring(0, 60)}${paper.title.length > 60 ? '...' : ''}"
                     </div>
                     <button class="close-visual-btn" onclick="closeVisualAbstract(${paperIndex})">✕ Close</button>
                 </div>
                 
                 <div class="visual-content">
-                    <!-- Study Overview -->
+                    <!-- What Was Actually Tested -->
+                    <div class="study-design-visual">
+                        <h3 style="color: #2c3e50; margin-bottom: 15px; text-align: center;">🧪 What Was Tested</h3>
+                        <div style="background: rgba(231, 76, 60, 0.1); border-left: 4px solid #e74c3c; padding: 20px; border-radius: 8px;">
+                            ${testedItem.intervention ? `
+                                <div style="font-size: 1.1em; font-weight: 600; color: #2c3e50; margin-bottom: 10px;">
+                                    Primary Intervention: <span style="color: #e74c3c;">${escapeHtml(testedItem.intervention)}</span>
+                                </div>
+                                ${testedItem.comparison ? `
+                                    <div style="font-size: 1em; color: #2c3e50; margin-bottom: 10px;">
+                                        Compared to: <span style="color: #9b59b6;">${escapeHtml(testedItem.comparison)}</span>
+                                    </div>
+                                ` : ''}
+                                <div style="font-size: 0.9em; color: #6c757d; font-style: italic;">
+                                    Study Type: ${testedItem.testType}
+                                </div>
+                            ` : `
+                                <div style="font-size: 1.1em; font-weight: 600; color: #2c3e50;">
+                                    Study Focus: ${testedItem.testType || 'Clinical investigation'}
+                                </div>
+                                <div style="font-size: 0.9em; color: #6c757d; margin-top: 10px; font-style: italic;">
+                                    Specific intervention details not clearly specified in abstract
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                    
+                    <!-- Who Was Studied -->
+                    <div class="patient-demographics">
+                        <div class="demographics-title">👥 Study Population</div>
+                        <div style="background: white; padding: 20px; border-radius: 10px; border: 2px solid #3498db;">
+                            ${population.size ? `
+                                <div style="text-align: center; margin-bottom: 15px;">
+                                    <div style="font-size: 2.5em; color: #3498db; font-weight: 700;">
+                                        ${population.size.toLocaleString()}
+                                    </div>
+                                    <div style="font-size: 1.2em; font-weight: 600; color: #2c3e50;">
+                                        ${population.size === 1 ? 'Patient' : 'Patients'}
+                                    </div>
+                                </div>
+                                ${population.condition ? `
+                                    <div style="background: rgba(52, 152, 219, 0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                                        <div style="font-weight: 600; color: #3498db; margin-bottom: 8px;">Patient Population:</div>
+                                        <div style="color: #2c3e50;">${escapeHtml(population.condition)}</div>
+                                    </div>
+                                ` : ''}
+                                ${population.characteristics.length > 0 ? `
+                                    <div style="margin-top: 15px;">
+                                        <div style="font-weight: 600; color: #3498db; margin-bottom: 8px;">Patient Characteristics:</div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                            ${population.characteristics.slice(0, 4).map(char => `
+                                                <span style="background: #e8f4f8; color: #2c3e50; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">
+                                                    ${escapeHtml(char)}
+                                                </span>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            ` : `
+                                <div style="text-align: center; padding: 20px; color: #6c757d;">
+                                    <div style="font-size: 1.5em; margin-bottom: 10px;">👥</div>
+                                    <div>Sample size not clearly specified in abstract</div>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                    
+                    <!-- Primary Results & Outcomes -->
+                    ${results.primaryEndpoint || results.keyFindings.length > 0 ? `
+                    <div class="results-section">
+                        <div class="results-title">📊 Primary Results</div>
+                        
+                        ${results.primaryEndpoint ? `
+                            <div style="background: rgba(40, 167, 69, 0.1); border-left: 4px solid #28a745; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                                <div style="font-weight: 600; color: #28a745; margin-bottom: 8px;">Primary Endpoint:</div>
+                                <div style="color: #2c3e50; font-size: 0.95em;">${escapeHtml(results.primaryEndpoint)}</div>
+                            </div>
+                        ` : ''}
+                        
+                        ${results.keyFindings.length > 0 ? `
+                            <div style="margin: 15px 0;">
+                                <div style="font-weight: 600; color: #28a745; margin-bottom: 12px;">Key Findings:</div>
+                                <div style="display: grid; gap: 10px;">
+                                    ${results.keyFindings.slice(0, 4).map(finding => `
+                                        <div style="background: white; border: 2px solid #28a745; border-radius: 8px; padding: 12px; text-align: center;">
+                                            <div style="font-size: 1.3em; font-weight: 700; color: #28a745;">
+                                                ${escapeHtml(finding)}
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        ${results.statisticalResults.length > 0 ? `
+                            <div style="margin: 15px 0;">
+                                <div style="font-weight: 600; color: #28a745; margin-bottom: 12px;">Statistical Significance:</div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                                    ${results.statisticalResults.slice(0, 4).map(stat => `
+                                        <span style="background: #f8f9fa; border: 1px solid #28a745; color: #28a745; padding: 6px 12px; border-radius: 15px; font-size: 0.85em; font-weight: 600;">
+                                            ${escapeHtml(stat)}
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        ${results.clinicalOutcome ? `
+                            <div style="background: rgba(40, 167, 69, 0.1); border: 2px solid #28a745; padding: 15px; border-radius: 10px; margin: 15px 0;">
+                                <div style="font-weight: 600; color: #28a745; margin-bottom: 8px;">Clinical Conclusion:</div>
+                                <div style="color: #2c3e50; font-style: italic; line-height: 1.4;">
+                                    "${escapeHtml(results.clinicalOutcome)}"
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ` : ''}
+                    
+                    <!-- Specific Study Flow - What Actually Happened -->
+                    <div class="study-design-visual">
+                        <h3 style="color: #2c3e50; margin-bottom: 20px; text-align: center;">⚡ Actual Study Process</h3>
+                        <div class="study-flow">
+                            ${specificFlow.map((step, index) => `
+                                <div class="flow-step" style="flex: 1; min-width: 140px;">
+                                    <span class="flow-icon" style="font-size: 2em;">${step.icon}</span>
+                                    <div class="flow-label" style="font-weight: 600; margin: 8px 0;">${step.title}</div>
+                                    <div style="font-size: 0.8em; color: #6c757d; line-height: 1.3; min-height: 40px; word-wrap: break-word;">
+                                        ${escapeHtml(step.detail)}
+                                    </div>
+                                </div>
+                                ${index < specificFlow.length - 1 ? '<div class="flow-arrow" style="font-size: 1.5em; color: #3498db;">→</div>' : ''}
+                            `).join('')}
+                        </div>
+                        
+                        <!-- Detailed explanations -->
+                        <div style="margin-top: 20px; padding: 15px; background: rgba(248, 249, 250, 0.8); border-radius: 8px;">
+                            <div style="font-weight: 600; color: #2c3e50; margin-bottom: 10px;">Study Summary:</div>
+                            ${specificFlow.map((step, index) => `
+                                <div style="margin: 5px 0; font-size: 0.9em; color: #2c3e50;">
+                                    <strong>${index + 1}.</strong> ${escapeHtml(step.fullDetail)}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <!-- Study Overview with Real Data -->
                     <div class="study-overview">
                         <div class="overview-item">
                             <span class="overview-icon">${studyIcon}</span>
-                            <div class="overview-label">Study Design</div>
-                            <div class="overview-value">${studyType}</div>
+                            <div class="overview-label">Study Type</div>
+                            <div class="overview-value">${studyDesign.type}</div>
+                            ${studyDesign.details ? `<div style="font-size: 0.8em; color: #6c757d; margin-top: 5px;">${studyDesign.details}</div>` : ''}
                         </div>
                         <div class="overview-item">
-                            <span class="overview-icon">👥</span>
-                            <div class="overview-label">Sample Size</div>
-                            <div class="overview-value">${sampleSize ? sampleSize.toLocaleString() : 'Not specified'}</div>
+                            <span class="overview-icon">🎯</span>
+                            <div class="overview-label">Primary Focus</div>
+                            <div class="overview-value">${testedItem.testType || 'Clinical Study'}</div>
+                            <div style="font-size: 0.75em; color: #6c757d; margin-top: 5px;">
+                                ${testedItem.intervention ? testedItem.intervention.substring(0, 40) + '...' : 'See intervention details above'}
+                            </div>
                         </div>
                         <div class="overview-item">
                             <span class="overview-icon">📊</span>
                             <div class="overview-label">Data Source</div>
                             <div class="overview-value">${paper.source_api}</div>
+                            <div style="font-size: 0.8em; color: #6c757d; margin-top: 5px;">${paper.source}</div>
                         </div>
                         <div class="overview-item">
                             <span class="overview-icon">📅</span>
-                            <div class="overview-label">Publication Year</div>
+                            <div class="overview-label">Publication</div>
                             <div class="overview-value">${paper.date}</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Study Objective -->
-                    <div class="study-design-visual">
-                        <h3 style="color: #2c3e50; margin-bottom: 15px; text-align: center;">🎯 Study Objective</h3>
-                        <p style="font-size: 1em; line-height: 1.5; color: #2c3e50; text-align: center; font-style: italic;">
-                            ${objective}
-                        </p>
-                    </div>
-                    
-                    <!-- Patient Demographics Visualization -->
-                    ${sampleSize ? `
-                    <div class="patient-demographics">
-                        <div class="demographics-title">👥 Study Population</div>
-                        <div class="patient-visual">
-                            <div class="patient-group">
-                                <div class="patient-icons">${patientIcons}</div>
-                                <div class="patient-label">${sampleSize.toLocaleString()} ${sampleSize === 1 ? 'Participant' : 'Participants'}</div>
-                            </div>
-                        </div>
-                    </div>
-                    ` : ''}
-                    
-                    <!-- Study Timeline -->
-                    <div class="timeline-section">
-                        <div class="timeline-title">⏰ Study Flow</div>
-                        <div class="timeline">
-                            ${timelineSteps.map(step => `
-                                <div class="timeline-point">
-                                    <div class="timeline-icon">${step.icon}</div>
-                                    <div class="timeline-label">${step.label}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    
-                    <!-- Key Results -->
-                    ${statistics.length > 0 ? `
-                    <div class="results-section">
-                        <div class="results-title">📊 Key Statistical Results</div>
-                        <div class="key-metrics">
-                            ${statistics.slice(0, 6).map((stat, index) => `
-                                <div class="metric-card">
-                                    <div class="metric-value">${escapeHtml(stat)}</div>
-                                    <div class="metric-label">Statistical Finding ${index + 1}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    ` : ''}
-                    
-                    <!-- Study Design Flow -->
-                    <div class="study-design-visual">
-                        <h3 style="color: #2c3e50; margin-bottom: 15px; text-align: center;">🔬 Study Design Flow</h3>
-                        <div class="study-flow">
-                            <div class="flow-step">
-                                <span class="flow-icon">🎯</span>
-                                <div class="flow-label">Hypothesis</div>
-                            </div>
-                            <div class="flow-arrow">→</div>
-                            <div class="flow-step">
-                                <span class="flow-icon">👥</span>
-                                <div class="flow-label">Subjects</div>
-                            </div>
-                            <div class="flow-arrow">→</div>
-                            <div class="flow-step">
-                                <span class="flow-icon">${studyIcon}</span>
-                                <div class="flow-label">Intervention</div>
-                            </div>
-                            <div class="flow-arrow">→</div>
-                            <div class="flow-step">
-                                <span class="flow-icon">📈</span>
-                                <div class="flow-label">Analysis</div>
-                            </div>
-                            <div class="flow-arrow">→</div>
-                            <div class="flow-step">
-                                <span class="flow-icon">🎉</span>
-                                <div class="flow-label">Results</div>
-                            </div>
+                            ${paper.pmid ? `<div style="font-size: 0.75em; color: #6c757d; margin-top: 5px;">PMID: ${paper.pmid}</div>` : ''}
                         </div>
                     </div>
                 </div>
@@ -2355,11 +2869,12 @@
                 loadUserProfile();
                 setupEventListeners();
                 updateSearchStats();
-                updateStatus('🚀 Ready to search! Enter cancer research keywords to find papers with AI-generated visual abstracts from PubMed, arXiv, and bioRxiv.');
+                updateStatus('🚀 Ready to search! Enter cancer research keywords to find papers with detailed AI-extracted information from PubMed, arXiv, and bioRxiv.');
                 console.log('✅ Cancer Research Visualizer initialized successfully');
-                console.log('🤖 New Feature: AI-assisted comprehensive visual abstracts with patient icons and study flow diagrams');
-                console.log('📚 Enhanced Features: Visual abstracts, key findings extraction, query highlighting');
+                console.log('🤖 Advanced AI Features: Extracts specific interventions, patient details, statistical results, and conclusions from each paper');
+                console.log('📊 Visual Abstracts: Shows what was tested, on whom, and the actual results (no generic labels)');
                 console.log('🔍 Data Sources: PubMed (NCBI), arXiv preprints, bioRxiv biology preprints');
+                console.log('💡 Click "Generate AI Visual Abstract" to see paper-specific details extracted from abstract text');
                 
             } catch (error) {
                 console.error('Initialization error:', error);
