@@ -188,28 +188,143 @@
         }
         .result-content { padding: 20px; }
         
-        /* Abstract Section */
-        .abstract-section {
-            background: linear-gradient(135deg, #e8f5e8, #f0f8ff);
+        /* Enhanced Visual Abstract Section */
+        .visual-abstract-section {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
             border-radius: 12px;
-            padding: 20px;
+            padding: 0;
             margin: 15px 0;
-            border-left: 5px solid #28a745;
-            position: relative;
+            border: 1px solid #dee2e6;
+            overflow: hidden;
         }
+        
+        .abstract-header {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
         .abstract-title {
-            font-weight: 700;
-            color: #2c3e50;
-            margin-bottom: 15px;
-            font-size: 1em;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 8px;
+            font-weight: 700;
+            font-size: 1em;
         }
+        
+        .abstract-icon {
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+        
+        .abstract-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 0.8em;
+            opacity: 0.9;
+        }
+        
+        .word-count, .reading-time {
+            background: rgba(255,255,255,0.2);
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+        
+        .abstract-content {
+            padding: 20px;
+        }
+        
         .abstract-text {
-            font-size: 0.85em;
+            font-size: 0.9em;
             line-height: 1.6;
             color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+        
+        .query-highlight {
+            background: linear-gradient(120deg, #fff3cd, #ffeaa7);
+            padding: 1px 3px;
+            border-radius: 3px;
+            font-weight: 600;
+            color: #856404;
+        }
+        
+        .key-findings {
+            background: rgba(40, 167, 69, 0.05);
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .findings-title {
+            font-weight: 700;
+            color: #28a745;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+        
+        .findings-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .findings-list li {
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(40, 167, 69, 0.1);
+            font-size: 0.85em;
+            line-height: 1.4;
+        }
+        
+        .findings-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .findings-list li::before {
+            content: "▪";
+            color: #28a745;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        
+        .abstract-note {
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px solid rgba(52, 152, 219, 0.2);
+            padding: 10px;
+            border-radius: 6px;
+            margin: 15px 0;
+            text-align: center;
+            font-size: 0.85em;
+            color: #2980b9;
+        }
+        
+        .abstract-footer {
+            padding: 15px 20px;
+            background: rgba(248, 249, 250, 0.5);
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .methodology-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .method-tag {
+            background: linear-gradient(135deg, #6f42c1, #6610f2);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.7em;
+            font-weight: 600;
+            text-transform: lowercase;
+        }
+        
+        .method-tag:first-letter {
+            text-transform: uppercase;
         }
         
         /* Enhanced Rating System */
@@ -644,11 +759,84 @@
                 
                 if (pmids.length === 0) return [];
                 
-                // Fetch detailed information for each PMID
+                // Fetch detailed information including abstracts using efetch
+                const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${pmids.slice(0, 15).join(',')}&retmode=xml`;
+                const fetchResponse = await fetch(fetchUrl);
+                
+                if (!fetchResponse.ok) {
+                    // Fallback to esummary if efetch fails
+                    return await fetchPubMedSummary(pmids.slice(0, 15));
+                }
+                
+                const xmlText = await fetchResponse.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                
+                const articles = xmlDoc.querySelectorAll('PubmedArticle');
+                const papers = [];
+                
+                articles.forEach((article, index) => {
+                    try {
+                        const titleElement = article.querySelector('ArticleTitle');
+                        const title = titleElement ? titleElement.textContent : 'Untitled Research Paper';
+                        
+                        // Extract abstract
+                        const abstractElement = article.querySelector('Abstract AbstractText');
+                        let abstract = 'Abstract not available - view full paper for details.';
+                        if (abstractElement) {
+                            abstract = abstractElement.textContent.substring(0, 1000);
+                        }
+                        
+                        // Extract authors
+                        const authorElements = article.querySelectorAll('Author');
+                        const authors = Array.from(authorElements).slice(0, 5).map(author => {
+                            const foreName = author.querySelector('ForeName')?.textContent || '';
+                            const lastName = author.querySelector('LastName')?.textContent || '';
+                            return `${foreName} ${lastName}`.trim() || 'Unknown Author';
+                        });
+                        
+                        // Extract publication info
+                        const journalElement = article.querySelector('Journal Title');
+                        const source = journalElement ? journalElement.textContent : 'PubMed Journal';
+                        
+                        const yearElement = article.querySelector('PubDate Year') || article.querySelector('DateCompleted Year');
+                        const date = yearElement ? yearElement.textContent : 'N/A';
+                        
+                        const pmid = pmids[index];
+                        
+                        papers.push({
+                            title: title,
+                            authors: authors.length > 0 ? authors : ['Unknown Author'],
+                            source: source,
+                            date: date,
+                            abstract: abstract,
+                            url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+                            keywords: extractKeywords(query, abstract),
+                            doi: null,
+                            source_api: 'PubMed',
+                            pmid: pmid,
+                            hasFullAbstract: abstractElement !== null
+                        });
+                    } catch (error) {
+                        console.warn('Error parsing PubMed article:', error);
+                    }
+                });
+                
+                return papers;
+                
+            } catch (error) {
+                console.error('PubMed API error:', error);
+                throw error;
+            }
+        }
+
+        // Fallback PubMed summary method
+        async function fetchPubMedSummary(pmids) {
+            try {
                 const summaryUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmids.join(',')}&retmode=json`;
                 const summaryResponse = await fetch(summaryUrl);
                 
-                if (!summaryResponse.ok) throw new Error(`PubMed summary failed: ${summaryResponse.status}`);
+                if (!summaryResponse.ok) return [];
                 
                 const summaryData = await summaryResponse.json();
                 const papers = [];
@@ -661,42 +849,62 @@
                             authors: paper.authors ? paper.authors.map(a => a.name).slice(0, 5) : ['Unknown Author'],
                             source: paper.source || 'PubMed Journal',
                             date: paper.pubdate ? paper.pubdate.split(' ')[0] : 'N/A',
-                            abstract: paper.abstract || 'Abstract available at PubMed link.',
+                            abstract: 'Full abstract available at PubMed link - click to view complete details.',
                             url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
-                            keywords: extractKeywords(query, paper.abstract),
+                            keywords: extractKeywords(query, ''),
                             doi: paper.doi || null,
                             source_api: 'PubMed',
-                            pmid: pmid
+                            pmid: pmid,
+                            hasFullAbstract: false
                         });
                     }
                 }
                 
                 return papers;
+            } catch (error) {
+                console.warn('PubMed summary fallback failed:', error);
+                return [];
+            }
+        }
+
+        // arXiv API (CORS friendly) - Enhanced abstract extraction
+        async function searchArXiv(query, timeFrame = '') {
+            try {
+                // Include medical/biological terms for better cancer research results
+                const expandedQuery = `${query} AND (cancer OR oncology OR tumor OR therapy OR biomedical OR clinical)`;
+                let searchUrl = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(expandedQuery)}&start=0&max_results=20&sortBy=relevance&sortOrder=descending`;
+                
+                const response = await fetch(searchUrl);
+                if (!response.ok) {
+                    // Fallback to original query if expanded search fails
+                    searchUrl = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=15&sortBy=relevance&sortOrder=descending`;
+                    const fallbackResponse = await fetch(searchUrl);
+                    if (!fallbackResponse.ok) throw new Error(`arXiv search failed: ${fallbackResponse.status}`);
+                    const fallbackXml = await fallbackResponse.text();
+                    return parseArXivResponse(fallbackXml, query, timeFrame);
+                }
+                
+                const xmlText = await response.text();
+                return parseArXivResponse(xmlText, query, timeFrame);
                 
             } catch (error) {
-                console.error('PubMed API error:', error);
+                console.error('arXiv API error:', error);
                 throw error;
             }
         }
 
-        // arXiv API (CORS friendly)
-        async function searchArXiv(query, timeFrame = '') {
-            try {
-                let searchUrl = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=15&sortBy=relevance&sortOrder=descending`;
-                
-                const response = await fetch(searchUrl);
-                if (!response.ok) throw new Error(`arXiv search failed: ${response.status}`);
-                
-                const xmlText = await response.text();
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-                
-                const entries = xmlDoc.querySelectorAll('entry');
-                const papers = [];
-                
-                for (const entry of entries) {
+        // Parse arXiv XML response
+        function parseArXivResponse(xmlText, query, timeFrame) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+            
+            const entries = xmlDoc.querySelectorAll('entry');
+            const papers = [];
+            
+            for (const entry of entries) {
+                try {
                     const title = entry.querySelector('title')?.textContent?.trim();
-                    const summary = entry.querySelector('summary')?.textContent?.trim();
+                    let summary = entry.querySelector('summary')?.textContent?.trim();
                     const published = entry.querySelector('published')?.textContent?.trim();
                     const link = entry.querySelector('link[title="pdf"]')?.getAttribute('href') || 
                                entry.querySelector('id')?.textContent?.trim();
@@ -714,27 +922,38 @@
                         }
                     }
                     
-                    if (title && summary) {
+                    // Clean and enhance summary
+                    if (summary) {
+                        // Remove extra whitespace and line breaks
+                        summary = summary.replace(/\s+/g, ' ').trim();
+                        // Limit length but try to end at sentence boundary
+                        if (summary.length > 800) {
+                            const truncated = summary.substring(0, 800);
+                            const lastPeriod = truncated.lastIndexOf('.');
+                            summary = lastPeriod > 600 ? truncated.substring(0, lastPeriod + 1) : truncated + '...';
+                        }
+                    }
+                    
+                    if (title && summary && summary.length > 50) {
                         papers.push({
                             title: title,
                             authors: authors.length > 0 ? authors : ['Unknown Author'],
                             source: 'arXiv Preprint',
                             date: published ? new Date(published).getFullYear().toString() : 'N/A',
-                            abstract: summary.substring(0, 800),
+                            abstract: summary,
                             url: link || '#',
                             keywords: extractKeywords(query, summary),
                             doi: null,
-                            source_api: 'arXiv'
+                            source_api: 'arXiv',
+                            hasFullAbstract: true
                         });
                     }
+                } catch (error) {
+                    console.warn('Error parsing arXiv entry:', error);
                 }
-                
-                return papers;
-                
-            } catch (error) {
-                console.error('arXiv API error:', error);
-                throw error;
             }
+            
+            return papers;
         }
 
         // bioRxiv API (biology preprints - CORS friendly)
@@ -909,7 +1128,7 @@
                 if (searchBtnText) searchBtnText.textContent = '🔄 Searching...';
                 
                 const timeFrameText = timeFrame ? ` (${getTimeFrameLabel(timeFrame)})` : '';
-                updateStatus(`🔍 Searching academic databases${timeFrameText}...`, 'searching');
+                updateStatus(`🔍 Searching academic databases and extracting detailed abstracts${timeFrameText}...`, 'searching');
                 
                 // Perform search with time frame
                 const papers = await performInternetSearch(query, timeFrame);
@@ -1002,7 +1221,7 @@
             });
         }
 
-        // Create individual result element
+        // Create individual result element with enhanced visual abstracts
         function createResultElement(result, index, query) {
             const resultDiv = document.createElement('div');
             resultDiv.className = 'result-card';
@@ -1033,13 +1252,8 @@
             const contentDiv = document.createElement('div');
             contentDiv.className = 'result-content';
             
-            // Abstract
-            const abstractSection = document.createElement('div');
-            abstractSection.className = 'abstract-section';
-            abstractSection.innerHTML = `
-                <div class="abstract-title">📄 Abstract</div>
-                <p class="abstract-text">${escapeHtml(result.abstract || 'Abstract not available.')}</p>
-            `;
+            // Enhanced Visual Abstract
+            const abstractSection = createVisualAbstract(result, query);
             contentDiv.appendChild(abstractSection);
             
             // Rating system
@@ -1054,6 +1268,111 @@
             resultDiv.appendChild(contentDiv);
             
             return resultDiv;
+        }
+
+        // Create enhanced visual abstract with better formatting
+        function createVisualAbstract(result, query) {
+            const abstractSection = document.createElement('div');
+            abstractSection.className = 'visual-abstract-section';
+            
+            const abstractText = result.abstract || 'Abstract not available - click link to view full paper.';
+            const isFullAbstract = result.hasFullAbstract !== false && abstractText.length > 50;
+            
+            // Highlight query terms in abstract
+            const highlightedAbstract = highlightQueryTerms(abstractText, query);
+            
+            // Calculate reading stats
+            const wordCount = abstractText.split(' ').length;
+            const readingTime = Math.max(1, Math.round(wordCount / 200)); // ~200 words per minute
+            
+            // Extract key findings (look for result indicators)
+            const keyFindings = extractKeyFindings(abstractText);
+            
+            abstractSection.innerHTML = `
+                <div class="abstract-header">
+                    <div class="abstract-title">
+                        <span class="abstract-icon">${isFullAbstract ? '📋' : '🔗'}</span>
+                        <span>Research Abstract</span>
+                        <div class="abstract-stats">
+                            <span class="word-count">${wordCount} words</span>
+                            <span class="reading-time">${readingTime} min read</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="abstract-content">
+                    <div class="abstract-text">${highlightedAbstract}</div>
+                    ${keyFindings.length > 0 ? `
+                        <div class="key-findings">
+                            <div class="findings-title">🔍 Key Findings:</div>
+                            <ul class="findings-list">
+                                ${keyFindings.map(finding => `<li>${escapeHtml(finding)}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                    ${!isFullAbstract ? `
+                        <div class="abstract-note">
+                            <em>💡 Full abstract available at source link below</em>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <div class="abstract-footer">
+                    <div class="methodology-tags">
+                        ${result.keywords ? result.keywords.slice(0, 4).map(keyword => 
+                            `<span class="method-tag">${escapeHtml(keyword)}</span>`
+                        ).join('') : ''}
+                    </div>
+                </div>
+            `;
+            
+            return abstractSection;
+        }
+
+        // Highlight query terms in abstract text
+        function highlightQueryTerms(text, query) {
+            if (!text || !query) return escapeHtml(text);
+            
+            const queryTerms = query.toLowerCase().split(' ').filter(term => term.length > 2);
+            let highlightedText = escapeHtml(text);
+            
+            queryTerms.forEach(term => {
+                const regex = new RegExp(`\\b(${term})\\b`, 'gi');
+                highlightedText = highlightedText.replace(regex, '<mark class="query-highlight">$1</mark>');
+            });
+            
+            return highlightedText;
+        }
+
+        // Extract key findings from abstract
+        function extractKeyFindings(abstractText) {
+            if (!abstractText || abstractText.length < 100) return [];
+            
+            const findings = [];
+            const text = abstractText.toLowerCase();
+            
+            // Look for result indicators
+            const resultPatterns = [
+                /(?:showed?|demonstrated?|found|revealed?|indicated?)[^.]{10,80}[.]/gi,
+                /(?:results?|findings?)[^.]{10,60}[.]/gi,
+                /(?:\d+%|\d+\.\d+%)[^.]{0,40}[.]/gi,
+                /(?:significant|significantly)[^.]{10,50}[.]/gi,
+                /(?:p\s*[<>=]\s*[\d.]+)[^.]{0,40}[.]/gi
+            ];
+            
+            resultPatterns.forEach(pattern => {
+                const matches = abstractText.match(pattern);
+                if (matches) {
+                    matches.slice(0, 2).forEach(match => {
+                        const cleaned = match.trim();
+                        if (cleaned.length > 20 && cleaned.length < 120) {
+                            findings.push(cleaned);
+                        }
+                    });
+                }
+            });
+            
+            return [...new Set(findings)].slice(0, 3); // Remove duplicates, max 3
         }
 
         // Create rating section
@@ -1323,10 +1642,10 @@
                 loadUserProfile();
                 setupEventListeners();
                 updateSearchStats();
-                updateStatus('🚀 Ready to search real academic databases! Enter cancer research keywords to find papers from PubMed, arXiv, and bioRxiv.');
+                updateStatus('🚀 Ready to search! Enter cancer research keywords to find papers with detailed visual abstracts from PubMed, arXiv, and bioRxiv.');
                 console.log('✅ Cancer Research Visualizer initialized successfully');
-                console.log('📚 Searching: PubMed (NCBI), arXiv preprints, bioRxiv biology preprints');
-                console.log('🔍 All results are from live academic databases - no mock data used');
+                console.log('📚 Enhanced Features: Visual abstracts, key findings extraction, query highlighting');
+                console.log('🔍 Data Sources: PubMed (NCBI), arXiv preprints, bioRxiv biology preprints');
                 
             } catch (error) {
                 console.error('Initialization error:', error);
