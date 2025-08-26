@@ -1,348 +1,113 @@
-# Cancer Research Visualizer - Live API Version
+I can see the issue from your screenshot. The deployment is failing with "Timeout reached, aborting!" errors. This means the build succeeded, but the actual deployment to GitHub Pages timed out.
 
-## GitHub Deployment Instructions
+## Quick Fixes for Deployment Timeout
 
-### Step 1: Repository Setup
+### Solution 1: Reduce File Size
+The HTML file with all the JavaScript is quite large (~15.8 KB shown in artifacts). Let's create a simpler version:
 
-1. Create a new GitHub repository:
-   ```bash
-   # Option A: Via GitHub web interface
-   # Go to github.com → New repository → Name: "cancer-research-visualizer"
-   
-   # Option B: Via GitHub CLI
-   gh repo create cancer-research-visualizer --public
-   ```
+**Create a minimal `index.html` to test deployment:**
 
-2. Clone and setup locally:
-   ```bash
-   git clone https://github.com/yourusername/cancer-research-visualizer.git
-   cd cancer-research-visualizer
-   ```
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cancer Research Visualizer</title>
+</head>
+<body>
+    <h1>Cancer Research Visualizer</h1>
+    <p>Coming soon - academic paper search tool</p>
+    <script>
+        console.log('Basic deployment test');
+    </script>
+</body>
+</html>
+```
 
-### Step 2: Add Required Files
+### Solution 2: Split the Code
+Instead of one large HTML file, split it:
 
-Create these files in your repository:
+**index.html** (minimal):
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cancer Research Visualizer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">Loading...</div>
+    <script src="app.js"></script>
+</body>
+</html>
+```
 
-**index.html** - The main application (provided in artifact above)
+**styles.css** (move CSS here)
+**app.js** (move JavaScript here)
 
-**README.md**:
-```markdown
-# Cancer Research Visualizer
+### Solution 3: Retry the Deployment
+Sometimes it's just a temporary GitHub issue:
 
-Real-time cancer research paper search using multiple academic APIs.
+1. Go to **Actions** tab
+2. Click **Re-run failed jobs** on the failed deployment
+3. Wait for it to complete
 
-## Live Demo
-[https://yourusername.github.io/cancer-research-visualizer](https://yourusername.github.io/cancer-research-visualizer)
+### Solution 4: Use Different Branch Strategy
 
-## Features
-- **7 Live Academic APIs**: PubMed, arXiv, CrossRef, CORE, Semantic Scholar, bioRxiv, Europe PMC
-- **Real-time Search**: Parallel API calls with rate limiting
-- **Comprehensive Results**: Deduplicated papers with abstracts and metadata
-- **API Status Monitoring**: Visual indicators for each data source
-- **Mobile Responsive**: Works on all devices
-
-## API Sources
-
-| API | Description | Rate Limit |
-|-----|-------------|------------|
-| PubMed | Medical literature database | 3/sec |
-| arXiv | Physics, math, CS preprints | 1/sec |
-| CrossRef | DOI metadata | 50/sec |
-| CORE | Open access research | 10/sec |
-| Semantic Scholar | AI-powered academic search | 100/sec |
-| bioRxiv | Biology preprints | 10/sec |
-| Europe PMC | Life sciences literature | 10/sec |
-
-## Usage
-1. Enter cancer research keywords (e.g., "immunotherapy checkpoint inhibitors")
-2. Click "Search Papers" 
-3. View results from multiple academic databases
-4. Follow links to full papers
-
-## Technical Details
-- **Frontend**: Pure HTML/CSS/JavaScript
-- **APIs**: RESTful academic databases
-- **Rate Limiting**: Built-in request throttling
-- **Error Handling**: Graceful API failure handling
-- **CORS**: Uses CORS-enabled APIs only
-
-## Development
+1. Create a new branch called `gh-pages`:
 ```bash
-# Serve locally
-python -m http.server 8000
-# or
-npx serve .
+git checkout -b gh-pages
+git push origin gh-pages
 ```
 
-## API Limitations
-- Free tier rate limits apply
-- Some APIs may require registration for higher limits
-- CORS restrictions may apply in some browsers
+2. In Settings > Pages, change source to `gh-pages` branch
 
-## Contributing
-1. Fork the repository
-2. Create feature branch
-3. Submit pull request
+### Solution 5: Manual Deployment
 
-## License
-MIT License
-```
+If automated deployment keeps timing out:
 
-**.gitignore**:
-```
-# System files
-.DS_Store
-Thumbs.db
+1. Download the GitHub Pages artifacts (the zip file shown in your screenshot)
+2. Extract and verify the contents
+3. Try pushing smaller commits:
 
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs
-*.log
-npm-debug.log*
-
-# Runtime data
-pids
-*.pid
-*.seed
-coverage/
-
-# Dependency directories
-node_modules/
-
-# Optional npm cache directory
-.npm
-
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-```
-
-**package.json** (optional, for development tools):
-```json
-{
-  "name": "cancer-research-visualizer",
-  "version": "1.0.0",
-  "description": "Real-time cancer research paper search using multiple academic APIs",
-  "main": "index.html",
-  "scripts": {
-    "start": "npx serve .",
-    "dev": "npx serve . --cors",
-    "build": "echo 'Static site - no build needed'",
-    "test": "echo 'Tests not implemented yet'"
-  },
-  "keywords": [
-    "cancer",
-    "research", 
-    "pubmed",
-    "arxiv",
-    "academic",
-    "papers",
-    "api"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yourusername/cancer-research-visualizer.git"
-  },
-  "devDependencies": {
-    "serve": "^14.0.0"
-  }
-}
-```
-
-**LICENSE**:
-```
-MIT License
-
-Copyright (c) 2024 Your Name
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-### Step 3: Deploy to GitHub Pages
-
-1. **Commit and push files**:
-   ```bash
-   git add .
-   git commit -m "Initial commit: Cancer research visualizer with live APIs"
-   git push origin main
-   ```
-
-2. **Enable GitHub Pages**:
-   - Go to repository Settings
-   - Scroll to "Pages" section
-   - Source: "Deploy from branch"
-   - Branch: "main" 
-   - Folder: "/ (root)"
-   - Click "Save"
-
-3. **Access your live site**:
-   - URL: `https://yourusername.github.io/cancer-research-visualizer`
-   - Wait 2-5 minutes for initial deployment
-
-### Step 4: Verify API Functionality
-
-Test each API source:
-1. Search for "immunotherapy checkpoint inhibitors"
-2. Check API status indicators at top
-3. Verify papers from multiple sources
-4. Test different search terms
-
-### Step 5: Optional Enhancements
-
-**Custom Domain** (optional):
 ```bash
-# Add CNAME file for custom domain
-echo "yourdomain.com" > CNAME
-git add CNAME
-git commit -m "Add custom domain"
+# Make smaller changes
+git add index.html
+git commit -m "Update HTML only"
+git push
+
+# Then add other files separately
+git add styles.css
+git commit -m "Add styles"
 git push
 ```
 
-**GitHub Actions for CI** (create `.github/workflows/deploy.yml`):
-```yaml
-name: Deploy to GitHub Pages
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+## Most Likely Solution
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Validate HTML
-      run: |
-        sudo apt-get install -y tidy
-        tidy -q -e index.html || true
-        
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v3
-      if: github.ref == 'refs/heads/main'
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./
+The timeout is probably due to the complex JavaScript with multiple API calls. Try this minimal version first:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cancer Research Visualizer</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .search-box { padding: 10px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>Cancer Research Visualizer</h1>
+    <input type="text" class="search-box" placeholder="Search research papers...">
+    <button onclick="alert('Search functionality coming soon!')">Search</button>
+    <p>Full API integration will be added after basic deployment works.</p>
+</body>
+</html>
 ```
 
-## API Integration Details
+Once this deploys successfully, you can gradually add the complex features back.
 
-### API Keys and Rate Limits
-
-**Free Tier Limits**:
-- PubMed: 3 requests/second (no key required)
-- arXiv: 1 request/second (no key required)  
-- CrossRef: 50 requests/second (polite pool)
-- CORE: 10 requests/second (registration recommended)
-- Semantic Scholar: 100 requests/second (no key required)
-- Europe PMC: 10 requests/second (no key required)
-- bioRxiv: Limited by date range queries
-
-**Production Considerations**:
-
-1. **API Keys**: Register for higher rate limits:
-   - CORE: Register at core.ac.uk
-   - Semantic Scholar: Request API key for higher limits
-   - CrossRef: Register for courtesy pool
-
-2. **Caching**: Add localStorage caching:
-   ```javascript
-   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-   
-   function getCachedResults(query) {
-     const cached = localStorage.getItem(`search_${query}`);
-     if (cached) {
-       const data = JSON.parse(cached);
-       if (Date.now() - data.timestamp < CACHE_DURATION) {
-         return data.results;
-       }
-     }
-     return null;
-   }
-   ```
-
-3. **Rate Limiting Enhancement**:
-   ```javascript
-   class RateLimiter {
-     constructor(requestsPerSecond) {
-       this.requests = [];
-       this.limit = requestsPerSecond;
-     }
-     
-     async waitForSlot() {
-       const now = Date.now();
-       this.requests = this.requests.filter(t => now - t < 1000);
-       
-       if (this.requests.length >= this.limit) {
-         const waitTime = 1000 - (now - this.requests[0]);
-         await new Promise(resolve => setTimeout(resolve, waitTime));
-         return this.waitForSlot();
-       }
-       
-       this.requests.push(now);
-     }
-   }
-   ```
-
-## Deployment Checklist
-
-- [ ] Repository created and cloned
-- [ ] All files added (index.html, README.md, etc.)
-- [ ] Files committed and pushed to main branch
-- [ ] GitHub Pages enabled in repository settings
-- [ ] Live site accessible at GitHub Pages URL
-- [ ] All 7 API sources showing green status
-- [ ] Search functionality working with real results
-- [ ] Mobile responsiveness verified
-- [ ] API rate limiting functioning properly
-- [ ] Error handling working for failed APIs
-
-## Troubleshooting
-
-**Common Issues**:
-
-1. **CORS Errors**: Some APIs may block browser requests
-   - Solution: Use CORS-enabled endpoints or proxy
-   
-2. **Rate Limiting**: Too many requests too fast
-   - Solution: Built-in rate limiting should handle this
-   
-3. **API Downtime**: External services may be unavailable
-   - Solution: Multiple APIs provide redundancy
-   
-4. **Empty Results**: Some APIs may not have relevant papers
-   - Solution: Try different search terms or broader queries
-
-**Debug Mode**: Add to console:
-```javascript
-console.log('API Status:', apiStatus);
-console.log('Current Results:', currentResults);
-```
-
-This setup provides a production-ready academic research tool with live data from multiple authoritative sources.
+Try the minimal version first - this should deploy in under 30 seconds and help us confirm GitHub Pages is working for your repository.
