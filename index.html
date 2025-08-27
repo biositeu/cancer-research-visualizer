@@ -227,7 +227,12 @@
             const query = document.getElementById('searchInput').value.toLowerCase();
             const resultsDiv = document.getElementById('results');
             
+            console.log('Search query:', query);
+            console.log('Papers available:', papers.length);
+            console.log('Results div found:', resultsDiv ? 'yes' : 'no');
+            
             if (!query) {
+                console.log('No query entered');
                 resultsDiv.innerHTML = '<p style="text-align: center; padding: 40px;">Enter search terms</p>';
                 return;
             }
@@ -238,17 +243,23 @@
                 paper.keywords.some(k => k.includes(query))
             );
             
+            console.log('Matches found:', matches.length);
+            
             if (matches.length === 0) {
+                console.log('No matches, showing no results message');
                 resultsDiv.innerHTML = '<p style="text-align: center; padding: 40px;">No papers found</p>';
                 return;
             }
             
             let html = '';
             matches.forEach((paper, index) => {
+                console.log('Creating HTML for paper:', paper.title);
                 html += createPaperHTML(paper, index);
             });
             
+            console.log('Setting results HTML, length:', html.length);
             resultsDiv.innerHTML = html;
+            console.log('Results HTML set');
         }
         
         function createPaperHTML(paper, index) {
