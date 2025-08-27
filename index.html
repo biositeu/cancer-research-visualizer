@@ -1,113 +1,384 @@
-I can see the issue from your screenshot. The deployment is failing with "Timeout reached, aborting!" errors. This means the build succeeded, but the actual deployment to GitHub Pages timed out.
-
-## Quick Fixes for Deployment Timeout
-
-### Solution 1: Reduce File Size
-The HTML file with all the JavaScript is quite large (~15.8 KB shown in artifacts). Let's create a simpler version:
-
-**Create a minimal `index.html` to test deployment:**
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cancer Research Visualizer</title>
-</head>
-<body>
-    <h1>Cancer Research Visualizer</h1>
-    <p>Coming soon - academic paper search tool</p>
-    <script>
-        console.log('Basic deployment test');
-    </script>
-</body>
-</html>
-```
-
-### Solution 2: Split the Code
-Instead of one large HTML file, split it:
-
-**index.html** (minimal):
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cancer Research Visualizer</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div id="app">Loading...</div>
-    <script src="app.js"></script>
-</body>
-</html>
-```
-
-**styles.css** (move CSS here)
-**app.js** (move JavaScript here)
-
-### Solution 3: Retry the Deployment
-Sometimes it's just a temporary GitHub issue:
-
-1. Go to **Actions** tab
-2. Click **Re-run failed jobs** on the failed deployment
-3. Wait for it to complete
-
-### Solution 4: Use Different Branch Strategy
-
-1. Create a new branch called `gh-pages`:
-```bash
-git checkout -b gh-pages
-git push origin gh-pages
-```
-
-2. In Settings > Pages, change source to `gh-pages` branch
-
-### Solution 5: Manual Deployment
-
-If automated deployment keeps timing out:
-
-1. Download the GitHub Pages artifacts (the zip file shown in your screenshot)
-2. Extract and verify the contents
-3. Try pushing smaller commits:
-
-```bash
-# Make smaller changes
-git add index.html
-git commit -m "Update HTML only"
-git push
-
-# Then add other files separately
-git add styles.css
-git commit -m "Add styles"
-git push
-```
-
-## Most Likely Solution
-
-The timeout is probably due to the complex JavaScript with multiple API calls. Try this minimal version first:
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
     <title>Cancer Research Visualizer</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .search-box { padding: 10px; margin: 20px 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .header h1 { font-size: 2.5em; margin-bottom: 15px; }
+        .header p { font-size: 1.2em; opacity: 0.9; }
+        
+        .search-section {
+            padding: 40px;
+            background: #f8f9fa;
+        }
+        
+        .search-controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        
+        .search-input {
+            flex: 1;
+            max-width: 400px;
+            padding: 15px 20px;
+            border: 2px solid #3498db;
+            border-radius: 25px;
+            font-size: 1.1em;
+            outline: none;
+        }
+        
+        .search-btn {
+            padding: 15px 30px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1.1em;
+        }
+        
+        .search-btn:hover { background: #c0392b; }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 25px;
+            padding: 40px;
+        }
+        
+        .result-card {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 15px;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .result-header {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 20px;
+        }
+        
+        .result-title {
+            font-size: 1.2em;
+            font-weight: 700;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+        
+        .result-content { padding: 20px; }
+        
+        .abstract-section {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 3px solid #17a2b8;
+        }
+        
+        .analysis-section {
+            background: #e8f5e8;
+            border-radius: 10px;
+            margin: 20px 0;
+            overflow: hidden;
+            border: 2px solid #28a745;
+        }
+        
+        .analysis-header {
+            background: #28a745;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .generate-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .generate-btn:hover { background: #ff5252; }
+        .generate-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        
+        .analysis-content {
+            padding: 20px;
+            background: white;
+            display: none;
+        }
+        
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .analysis-card {
+            background: #f8f9fa;
+            padding: 18px;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .card-title {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 12px;
+        }
+        
+        .card-content {
+            font-size: 0.95em;
+            line-height: 1.5;
+            color: #495057;
+        }
+        
+        @media (max-width: 768px) {
+            .search-controls { flex-direction: column; }
+            .results-grid { grid-template-columns: 1fr; padding: 20px; }
+            .analysis-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-    <h1>Cancer Research Visualizer</h1>
-    <input type="text" class="search-box" placeholder="Search research papers...">
-    <button onclick="alert('Search functionality coming soon!')">Search</button>
-    <p>Full API integration will be added after basic deployment works.</p>
+    <div class="container">
+        <header class="header">
+            <h1>Cancer Research Visualizer</h1>
+            <p>Advanced AI Analysis • Visual Abstracts • Research Insights</p>
+        </header>
+        
+        <section class="search-section">
+            <h2 style="text-align: center; margin-bottom: 30px; color: #2c3e50;">Search Cancer Research Papers</h2>
+            
+            <div class="search-controls">
+                <input type="text" id="searchInput" class="search-input" placeholder="Enter research keywords..." />
+                <button class="search-btn" id="searchBtn">Search Papers</button>
+            </div>
+        </section>
+        
+        <div id="results" class="results-grid"></div>
+    </div>
+
+    <script>
+        console.log('Script loading...');
+        
+        // Sample research papers
+        const papers = [
+            {
+                title: "Enhanced In Vivo Efficacy of Engineered T-Cell Therapies in Solid Tumors",
+                authors: ["Dr. Sarah Chen", "Prof. Michael Rodriguez", "Dr. Emily Watson"],
+                source: "Nature Medicine • 2024",
+                abstract: "Background: T-cell therapy shows promise in solid tumors. Methods: Phase II trial with 89 patients. Results: ORR was 67% vs 23% controls (p<0.001). Median PFS 11.2 vs 4.1 months (HR 0.43). Grade 3-4 CRS in 18%. Conclusion: Superior efficacy with manageable toxicity.",
+                keywords: ["t-cell", "immunotherapy", "solid tumors"]
+            },
+            {
+                title: "Combination Immunotherapy with PD-1 and LAG-3 Blockade in Melanoma",
+                authors: ["Prof. Jennifer Walsh", "Dr. Robert Chen"],
+                source: "NEJM • 2024", 
+                abstract: "Background: LAG-3 checkpoint receptor study. Methods: 714 patients randomized. Results: Median PFS 10.1 vs 4.6 months (HR 0.75, p=0.006). ORR 43.1% vs 32.6%. Grade 3-4 AEs 18.9% vs 9.7%. Conclusion: Dual blockade improves outcomes.",
+                keywords: ["immunotherapy", "checkpoint", "melanoma"]
+            },
+            {
+                title: "Circulating Tumor DNA Monitoring for Minimal Residual Disease Detection",
+                authors: ["Dr. Patricia Kim", "Prof. Andrew Chang"],
+                source: "Lancet Oncology • 2024",
+                abstract: "Background: ctDNA monitoring study. Methods: 455 patients with colorectal cancer. Results: ctDNA positive in 23%, HR 11.5 for recurrence (p<0.001). Sensitivity 92%, specificity 98%. Detection preceded imaging by 8.7 months. Conclusion: Enables personalized surveillance.",
+                keywords: ["liquid biopsy", "ctDNA", "biomarkers"]
+            }
+        ];
+        
+        function performSearch() {
+            console.log('Search function called');
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const resultsDiv = document.getElementById('results');
+            
+            if (!query) {
+                resultsDiv.innerHTML = '<p style="text-align: center; padding: 40px;">Enter search terms</p>';
+                return;
+            }
+            
+            const matches = papers.filter(paper => 
+                paper.title.toLowerCase().includes(query) ||
+                paper.abstract.toLowerCase().includes(query) ||
+                paper.keywords.some(k => k.includes(query))
+            );
+            
+            if (matches.length === 0) {
+                resultsDiv.innerHTML = '<p style="text-align: center; padding: 40px;">No papers found</p>';
+                return;
+            }
+            
+            let html = '';
+            matches.forEach((paper, index) => {
+                html += createPaperHTML(paper, index);
+            });
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        function createPaperHTML(paper, index) {
+            return `
+                <div class="result-card">
+                    <div class="result-header">
+                        <div class="result-title">${paper.title}</div>
+                        <div style="font-size: 0.9em; margin-top: 10px;">
+                            ${paper.authors.join(', ')} • ${paper.source}
+                        </div>
+                    </div>
+                    
+                    <div class="result-content">
+                        <div class="analysis-section">
+                            <div class="analysis-header">
+                                <span>AI Visual Analysis</span>
+                                <button class="generate-btn" onclick="generateAnalysis(${index})">Generate Analysis</button>
+                            </div>
+                            <div id="analysis-${index}" class="analysis-content"></div>
+                        </div>
+                        
+                        <div class="abstract-section">
+                            <div style="font-weight: 600; margin-bottom: 10px;">Abstract:</div>
+                            <div>${paper.abstract}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function generateAnalysis(index) {
+            console.log('Generating analysis for paper', index);
+            const contentDiv = document.getElementById(`analysis-${index}`);
+            const paper = papers[index];
+            
+            setTimeout(() => {
+                const analysis = analyzeText(paper.abstract);
+                contentDiv.innerHTML = createAnalysisHTML(analysis);
+                contentDiv.style.display = 'block';
+            }, 1000);
+        }
+        
+        function analyzeText(text) {
+            return {
+                studyType: getStudyType(text),
+                sampleSize: getSampleSize(text),
+                results: getResults(text),
+                safety: getSafety(text)
+            };
+        }
+        
+        function getStudyType(text) {
+            if (text.includes('Phase II')) return 'Phase II Clinical Trial';
+            if (text.includes('randomized')) return 'Randomized Controlled Trial';
+            return 'Clinical Research Study';
+        }
+        
+        function getSampleSize(text) {
+            const match = text.match(/(\d+)\s+patients?/);
+            if (match) return `${match[1]} participants`;
+            return 'Sample size not specified';
+        }
+        
+        function getResults(text) {
+            const results = [];
+            const orrMatch = text.match(/ORR[^.]*?(\d+%)/);
+            if (orrMatch) results.push(`Response rate: ${orrMatch[1]}`);
+            
+            const pfsMatch = text.match(/PFS[^.]*?(\d+\.\d+)[^.]*?months/);
+            if (pfsMatch) results.push(`Median PFS: ${pfsMatch[1]} months`);
+            
+            return results.length > 0 ? results : ['Primary endpoints met'];
+        }
+        
+        function getSafety(text) {
+            const gradeMatch = text.match(/Grade 3-4[^.]*?(\d+%)/);
+            if (gradeMatch) return `Grade 3-4 events: ${gradeMatch[1]}`;
+            
+            const aeMatch = text.match(/AEs[^.]*?(\d+\.\d+%)/);
+            if (aeMatch) return `Adverse events: ${aeMatch[1]}`;
+            
+            return 'Safety profile acceptable';
+        }
+        
+        function createAnalysisHTML(analysis) {
+            return `
+                <div class="analysis-grid">
+                    <div class="analysis-card">
+                        <div class="card-title">Study Design</div>
+                        <div class="card-content">${analysis.studyType}</div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="card-title">Population</div>
+                        <div class="card-content">${analysis.sampleSize}</div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="card-title">Key Results</div>
+                        <div class="card-content">${analysis.results.join('<br>')}</div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="card-title">Safety</div>
+                        <div class="card-content">${analysis.safety}</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+            
+            const searchBtn = document.getElementById('searchBtn');
+            const searchInput = document.getElementById('searchInput');
+            
+            if (searchBtn) {
+                searchBtn.addEventListener('click', performSearch);
+                console.log('Search button listener added');
+            }
+            
+            if (searchInput) {
+                searchInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        performSearch();
+                    }
+                });
+                console.log('Search input listener added');
+            }
+        });
+        
+        console.log('Script loaded successfully');
+    </script>
 </body>
 </html>
-```
-
-Once this deploys successfully, you can gradually add the complex features back.
-
-Try the minimal version first - this should deploy in under 30 seconds and help us confirm GitHub Pages is working for your repository.
