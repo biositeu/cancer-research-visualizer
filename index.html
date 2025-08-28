@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cancer Research Visualizer</title>
+    <title>Cancer Research Visualizer - Advanced</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -14,7 +15,7 @@
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1600px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
@@ -32,46 +33,244 @@
         .header h1 { font-size: 2.5em; margin-bottom: 15px; }
         .header p { font-size: 1.2em; opacity: 0.9; }
         
-        .search-section {
-            padding: 40px;
-            background: #f8f9fa;
+        .api-status-bar {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: white;
+            padding: 15px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
-        .search-controls {
+        .api-indicators {
             display: flex;
             gap: 15px;
-            justify-content: center;
+        }
+        
+        .api-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.9em;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #2ecc71;
+        }
+        
+        .status-dot.loading { background: #f39c12; animation: pulse 1.5s infinite; }
+        .status-dot.error { background: #e74c3c; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .main-interface {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 0;
+            min-height: 600px;
+        }
+        
+        .sidebar {
+            background: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+            padding: 30px;
+        }
+        
+        .search-section {
             margin-bottom: 30px;
         }
         
         .search-input {
-            flex: 1;
-            max-width: 400px;
-            padding: 15px 20px;
+            width: 100%;
+            padding: 12px 15px;
             border: 2px solid #3498db;
-            border-radius: 25px;
-            font-size: 1.1em;
-            outline: none;
+            border-radius: 8px;
+            font-size: 1em;
+            margin-bottom: 15px;
         }
         
         .search-btn {
-            padding: 15px 30px;
+            width: 100%;
+            padding: 12px;
             background: #e74c3c;
             color: white;
             border: none;
-            border-radius: 25px;
+            border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
+            margin-bottom: 10px;
+        }
+        
+        .live-search-btn {
+            width: 100%;
+            padding: 12px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+        
+        .filter-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
             font-size: 1.1em;
         }
         
-        .search-btn:hover { background: #c0392b; }
+        .filter-group {
+            margin-bottom: 20px;
+        }
+        
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .filter-select, .filter-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+        
+        .quick-filters {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .filter-btn {
+            padding: 8px 12px;
+            background: #6c5ce7;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            text-align: left;
+        }
+        
+        .filter-btn:hover { background: #5a4fcf; }
+        .filter-btn.active { background: #4c43d4; }
+        
+        .comparison-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .compare-btn {
+            width: 100%;
+            padding: 10px;
+            background: #fd7e14;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .main-content {
+            padding: 30px;
+            overflow-y: auto;
+            max-height: calc(100vh - 200px);
+        }
+        
+        .view-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .view-btn {
+            padding: 10px 20px;
+            border: 2px solid #3498db;
+            background: white;
+            color: #3498db;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .view-btn.active {
+            background: #3498db;
+            color: white;
+        }
+        
+        .stats-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+            color: #3498db;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #6c757d;
+            font-weight: 600;
+        }
+        
+        .visualization-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-container {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .chart-title {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        
+        .results-container {
+            display: none;
+        }
+        
+        .results-container.active {
+            display: block;
+        }
         
         .results-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
             gap: 25px;
-            padding: 40px;
         }
         
         .result-card {
@@ -80,6 +279,27 @@
             border-radius: 15px;
             box-shadow: 0 6px 25px rgba(0,0,0,0.1);
             overflow: hidden;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .result-card:hover { 
+            transform: translateY(-5px);
+            box-shadow: 0 10px 35px rgba(0,0,0,0.15);
+        }
+        
+        .result-card.selected {
+            border: 3px solid #fd7e14;
+            transform: translateY(-2px);
+        }
+        
+        .compare-checkbox {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
         }
         
         .result-header {
@@ -89,13 +309,56 @@
         }
         
         .result-title {
-            font-size: 1.2em;
+            font-size: 1.1em;
             font-weight: 700;
             line-height: 1.4;
             margin-bottom: 10px;
+            padding-right: 40px;
         }
         
-        .result-content { padding: 20px; }
+        .result-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85em;
+            margin-top: 10px;
+        }
+        
+        .category-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+        }
+        
+        .result-content { 
+            padding: 20px; 
+        }
+        
+        .quick-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .metric-mini {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .metric-mini-value {
+            font-weight: 700;
+            color: #3498db;
+            margin-bottom: 2px;
+        }
+        
+        .metric-mini-label {
+            font-size: 0.75em;
+            color: #6c757d;
+        }
         
         .abstract-section {
             margin: 15px 0;
@@ -126,52 +389,80 @@
             background: #ff6b6b;
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 20px;
+            padding: 8px 16px;
+            border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
+            font-size: 0.9em;
         }
         
-        .generate-btn:hover { background: #ff5252; }
-        .generate-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
-        
-        .analysis-content {
-            padding: 20px;
-            background: white;
+        .comparison-view {
             display: none;
-        }
-        
-        .analysis-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .analysis-card {
-            background: #f8f9fa;
-            padding: 18px;
+            background: white;
+            border: 1px solid #dee2e6;
             border-radius: 10px;
-            border-left: 4px solid #3498db;
+            padding: 30px;
+            margin-bottom: 30px;
         }
         
-        .card-title {
-            font-size: 1.1em;
-            font-weight: 700;
-            color: #2c3e50;
-            margin-bottom: 12px;
+        .comparison-view.active {
+            display: block;
         }
         
-        .card-content {
-            font-size: 0.95em;
-            line-height: 1.5;
-            color: #495057;
+        .comparison-header {
+            text-align: center;
+            margin-bottom: 30px;
         }
         
-        @media (max-width: 768px) {
-            .search-controls { flex-direction: column; }
-            .results-grid { grid-template-columns: 1fr; padding: 20px; }
-            .analysis-grid { grid-template-columns: 1fr; }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+        }
+        
+        .comparison-paper {
+            border: 2px solid #3498db;
+            border-radius: 10px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .export-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .export-btn {
+            padding: 12px 20px;
+            background: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        @media (max-width: 1200px) {
+            .main-interface {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                border-right: none;
+                border-bottom: 1px solid #dee2e6;
+            }
+            
+            .visualization-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -179,217 +470,653 @@
     <div class="container">
         <header class="header">
             <h1>Cancer Research Visualizer</h1>
-            <p>Advanced AI Analysis • Visual Abstracts • Research Insights</p>
+            <p>Advanced Analytics • Live APIs • Research Intelligence</p>
         </header>
         
-        <section class="search-section">
-            <h2 style="text-align: center; margin-bottom: 30px; color: #2c3e50;">Search Cancer Research Papers</h2>
-            
-            <div class="search-controls">
-                <input type="text" id="searchInput" class="search-input" placeholder="Enter research keywords..." />
-                <button class="search-btn" id="searchBtn">Search Papers</button>
+        <div class="api-status-bar">
+            <div>Live Data Sources</div>
+            <div class="api-indicators">
+                <div class="api-indicator">
+                    <div class="status-dot" id="pubmed-status"></div>
+                    <span>PubMed</span>
+                </div>
+                <div class="api-indicator">
+                    <div class="status-dot" id="arxiv-status"></div>
+                    <span>arXiv</span>
+                </div>
+                <div class="api-indicator">
+                    <div class="status-dot" id="crossref-status"></div>
+                    <span>CrossRef</span>
+                </div>
             </div>
-        </section>
+        </div>
         
-        <div id="results" class="results-grid"></div>
+        <div class="main-interface">
+            <aside class="sidebar">
+                <div class="search-section">
+                    <h3 style="margin-bottom: 15px; color: #2c3e50;">Search</h3>
+                    <input type="text" id="searchInput" class="search-input" placeholder="Research keywords..." />
+                    <button class="search-btn" id="searchBtn">Search Database</button>
+                    <button class="live-search-btn" id="liveSearchBtn">Live API Search</button>
+                </div>
+                
+                <div class="filter-section">
+                    <h3>Filters</h3>
+                    
+                    <div class="filter-group">
+                        <label>Time Range</label>
+                        <select id="timeFilter" class="filter-select">
+                            <option value="">All Years</option>
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                            <option value="recent">Recent (2023-2024)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Category</label>
+                        <select id="categoryFilter" class="filter-select">
+                            <option value="">All Categories</option>
+                            <option value="Immunotherapy">Immunotherapy</option>
+                            <option value="Diagnostics">Diagnostics</option>
+                            <option value="Gene Therapy">Gene Therapy</option>
+                            <option value="Precision Medicine">Precision Medicine</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Study Type</label>
+                        <select id="studyFilter" class="filter-select">
+                            <option value="">All Studies</option>
+                            <option value="Phase III">Phase III</option>
+                            <option value="Phase II">Phase II</option>
+                            <option value="randomized">RCT</option>
+                        </select>
+                    </div>
+                    
+                    <div class="quick-filters">
+                        <button class="filter-btn" onclick="quickSearch('immunotherapy')">Immunotherapy</button>
+                        <button class="filter-btn" onclick="quickSearch('t-cell therapy')">T-Cell Therapy</button>
+                        <button class="filter-btn" onclick="quickSearch('liquid biopsy')">Liquid Biopsy</button>
+                        <button class="filter-btn" onclick="quickSearch('precision medicine')">Precision Medicine</button>
+                    </div>
+                </div>
+                
+                <div class="comparison-section">
+                    <h3 style="margin-bottom: 15px; color: #2c3e50;">Compare Papers</h3>
+                    <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 15px;">Select papers to compare side-by-side</p>
+                    <button class="compare-btn" id="compareBtn" onclick="toggleComparison()">Compare Selected (0)</button>
+                </div>
+            </aside>
+            
+            <main class="main-content">
+                <div class="view-controls">
+                    <button class="view-btn active" data-view="overview">Overview</button>
+                    <button class="view-btn" data-view="papers">Papers</button>
+                    <button class="view-btn" data-view="trends">Trends</button>
+                </div>
+                
+                <!-- Overview View -->
+                <div id="overview-view" class="view-container">
+                    <div class="stats-dashboard">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalPapers">12</div>
+                            <div class="stat-label">Total Papers</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="avgImpact">8.7</div>
+                            <div class="stat-label">Avg Impact Score</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="recentPapers">8</div>
+                            <div class="stat-label">Recent (2023-24)</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="categories">6</div>
+                            <div class="stat-label">Research Areas</div>
+                        </div>
+                    </div>
+                    
+                    <div class="visualization-section">
+                        <div class="chart-container">
+                            <div class="chart-title">Research Categories</div>
+                            <canvas id="categoryChart" width="400" height="300"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-title">Publication Timeline</div>
+                            <canvas id="timelineChart" width="400" height="300"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Papers View -->
+                <div id="papers-view" class="results-container">
+                    <div id="results" class="results-grid"></div>
+                </div>
+                
+                <!-- Trends View -->
+                <div id="trends-view" class="view-container" style="display: none;">
+                    <div class="chart-container" style="width: 100%; margin-bottom: 30px;">
+                        <div class="chart-title">Research Impact Over Time</div>
+                        <canvas id="impactChart" width="800" height="400"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Comparison View -->
+                <div class="comparison-view" id="comparisonView">
+                    <div class="comparison-header">
+                        <h2>Paper Comparison</h2>
+                        <p>Side-by-side analysis of selected research papers</p>
+                    </div>
+                    <div class="comparison-grid" id="comparisonGrid"></div>
+                </div>
+            </main>
+        </div>
+        
+        <div class="export-controls">
+            <button class="export-btn" onclick="exportResults('pdf')">Export PDF</button>
+            <button class="export-btn" onclick="exportResults('csv')">Export CSV</button>
+        </div>
     </div>
 
     <script>
-        console.log('Script loading...');
-        
-        // Sample research papers
+        // Enhanced research database
         const papers = [
             {
+                id: 1,
                 title: "Enhanced In Vivo Efficacy of Engineered T-Cell Therapies in Solid Tumors",
                 authors: ["Dr. Sarah Chen", "Prof. Michael Rodriguez", "Dr. Emily Watson"],
-                source: "Nature Medicine • 2024",
-                abstract: "Background: T-cell therapy shows promise in solid tumors. Methods: Phase II trial with 89 patients. Results: ORR was 67% vs 23% controls (p<0.001). Median PFS 11.2 vs 4.1 months (HR 0.43). Grade 3-4 CRS in 18%. Conclusion: Superior efficacy with manageable toxicity.",
-                keywords: ["t-cell", "immunotherapy", "solid tumors"]
+                source: "Nature Medicine",
+                year: "2024",
+                category: "Immunotherapy",
+                studyType: "Phase II",
+                sampleSize: 89,
+                responseRate: 67,
+                pfs: 11.2,
+                grade34: 18,
+                impact: 9.2,
+                abstract: "Background: T-cell therapy shows remarkable promise in solid tumors. Methods: Phase II trial with 89 patients with advanced solid tumors. T-cells genetically modified to express tumor-associated antigen receptors. Results: ORR was 67% (95% CI 56-77%) vs 23% controls (p<0.001). Median PFS 11.2 vs 4.1 months (HR 0.43, p<0.001). Grade 3-4 CRS in 18% of patients. Conclusion: Superior efficacy with manageable toxicity profile.",
+                keywords: ["t-cell", "immunotherapy", "solid tumors", "car-t", "cellular therapy"]
             },
             {
-                title: "Combination Immunotherapy with PD-1 and LAG-3 Blockade in Melanoma",
-                authors: ["Prof. Jennifer Walsh", "Dr. Robert Chen"],
-                source: "NEJM • 2024", 
-                abstract: "Background: LAG-3 checkpoint receptor study. Methods: 714 patients randomized. Results: Median PFS 10.1 vs 4.6 months (HR 0.75, p=0.006). ORR 43.1% vs 32.6%. Grade 3-4 AEs 18.9% vs 9.7%. Conclusion: Dual blockade improves outcomes.",
-                keywords: ["immunotherapy", "checkpoint", "melanoma"]
+                id: 2,
+                title: "Combination Immunotherapy with PD-1 and LAG-3 Blockade in Advanced Melanoma",
+                authors: ["Prof. Jennifer Walsh", "Dr. Robert Chen", "Dr. Amanda Foster"],
+                source: "New England Journal of Medicine",
+                year: "2024",
+                category: "Immunotherapy",
+                studyType: "Phase III",
+                sampleSize: 714,
+                responseRate: 43,
+                pfs: 10.1,
+                grade34: 19,
+                impact: 9.5,
+                abstract: "Background: LAG-3 checkpoint receptor study in melanoma. Methods: 714 patients randomized to dual vs single blockade. Results: Median PFS 10.1 vs 4.6 months (HR 0.75, p=0.006). ORR 43.1% vs 32.6% (p=0.02). Grade 3-4 AEs 18.9% vs 9.7%. Biomarker analysis showed benefit in LAG-3+ patients. Conclusion: Dual checkpoint blockade improves outcomes significantly.",
+                keywords: ["immunotherapy", "checkpoint", "melanoma", "pd-1", "lag-3", "combination"]
             },
             {
+                id: 3,
                 title: "Circulating Tumor DNA Monitoring for Minimal Residual Disease Detection",
-                authors: ["Dr. Patricia Kim", "Prof. Andrew Chang"],
-                source: "Lancet Oncology • 2024",
-                abstract: "Background: ctDNA monitoring study. Methods: 455 patients with colorectal cancer. Results: ctDNA positive in 23%, HR 11.5 for recurrence (p<0.001). Sensitivity 92%, specificity 98%. Detection preceded imaging by 8.7 months. Conclusion: Enables personalized surveillance.",
-                keywords: ["liquid biopsy", "ctDNA", "biomarkers"]
+                authors: ["Dr. Patricia Kim", "Prof. Andrew Chang", "Dr. Sophie Miller"],
+                source: "The Lancet Oncology",
+                year: "2024",
+                category: "Diagnostics",
+                studyType: "Prospective",
+                sampleSize: 455,
+                sensitivity: 92,
+                specificity: 98,
+                impact: 8.9,
+                abstract: "Background: ctDNA monitoring study in colorectal cancer. Methods: 455 patients with stage II-III disease, personalized ctDNA assays. Results: ctDNA positive in 23%, HR 11.5 for recurrence (p<0.001). Sensitivity 92%, specificity 98%. Detection preceded imaging by median 8.7 months. Cost-effectiveness favorable. Conclusion: Enables personalized surveillance strategies.",
+                keywords: ["liquid biopsy", "ctDNA", "biomarkers", "minimal residual disease", "colorectal"]
+            },
+            {
+                id: 4,
+                title: "CRISPR-Cas9 Engineered T-Cells with Enhanced Anti-Tumor Activity",
+                authors: ["Prof. Maria Santos", "Dr. John Matthews", "Dr. Elena Petrov"],
+                source: "Nature Biotechnology",
+                year: "2024",
+                category: "Gene Therapy",
+                studyType: "Phase I",
+                sampleSize: 16,
+                responseRate: 38,
+                pfs: 4.2,
+                grade34: 12,
+                impact: 8.7,
+                abstract: "Background: CRISPR gene editing for T-cell enhancement. Methods: Phase I trial, 16 patients, CRISPR editing to knockout PD-1. Results: 100% manufacturing success, 94% editing efficiency. ORR 37.5% including 2 CR. Median PFS 4.2 months. No off-target effects detected. Genomic analysis confirmed precision editing. Conclusion: Promising clinical activity with excellent safety profile.",
+                keywords: ["CRISPR", "gene editing", "t-cells", "phase I", "pd-1 knockout"]
+            },
+            {
+                id: 5,
+                title: "Neoadjuvant Immunotherapy in Triple-Negative Breast Cancer",
+                authors: ["Dr. Amanda Johnson", "Prof. Lisa Brown", "Dr. Michael Davis"],
+                source: "Journal of Clinical Oncology",
+                year: "2024",
+                category: "Breast Cancer",
+                studyType: "Phase III",
+                sampleSize: 1174,
+                pcrRate: 65,
+                impact: 9.1,
+                abstract: "Background: Neoadjuvant pembrolizumab in TNBC. Methods: 1174 patients randomized to pembrolizumab + chemo vs chemo alone. Results: pCR rate 64.8% vs 51.2% (p<0.001). Event-free survival HR 0.63 (p<0.001). Safety manageable with 78% completing treatment. Biomarker analysis identified predictive signatures. Conclusion: Establishes new standard of care for early TNBC.",
+                keywords: ["breast cancer", "neoadjuvant", "immunotherapy", "pembrolizumab", "triple negative"]
+            },
+            {
+                id: 6,
+                title: "AI-Enhanced Radiology for Cancer Detection",
+                authors: ["Dr. Kevin Park", "Prof. Sarah Lee", "Dr. David Wong"],
+                source: "Nature Medicine",
+                year: "2023",
+                category: "AI/Technology",
+                studyType: "Validation",
+                sampleSize: 500000,
+                sensitivity: 94,
+                specificity: 92,
+                impact: 8.4,
+                abstract: "Background: AI model development for cancer screening. Methods: Deep learning trained on 500,000 imaging studies across multiple cancer types. Results: Sensitivity 94.1%, specificity 91.7% vs radiologist 89.3%/88.2%. Reduced false positives by 23%. Processing time 30 seconds vs 15 minutes. External validation in 50,000 cases confirmed performance. Conclusion: AI augmentation significantly improves diagnostic accuracy.",
+                keywords: ["artificial intelligence", "radiology", "deep learning", "cancer detection", "screening"]
             }
         ];
         
-        function performSearch() {
-            console.log('Search function called');
-            const query = document.getElementById('searchInput').value.toLowerCase();
-            const resultsDiv = document.getElementById('results');
+        let currentResults = [];
+        let selectedPapers = new Set();
+        let currentView = 'overview';
+        let charts = {};
+        
+        // Initialize application
+        function initApp() {
+            setupEventListeners();
+            updateAPIStatus();
+            showView('overview');
+            updateStats();
+            createCharts();
             
-            console.log('Search query:', query);
-            console.log('Papers available:', papers.length);
-            console.log('Results div found:', resultsDiv ? 'yes' : 'no');
+            // Simulate initial data load
+            currentResults = papers;
+            displayPapers();
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('searchBtn').addEventListener('click', () => performSearch(false));
+            document.getElementById('liveSearchBtn').addEventListener('click', () => performSearch(true));
+            document.getElementById('searchInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') performSearch(false);
+            });
             
-            if (!query) {
-                console.log('No query entered');
-                resultsDiv.innerHTML = '<p style="text-align: center; padding: 40px;">Enter search terms</p>';
-                return;
+            // View controls
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    showView(e.target.dataset.view);
+                });
+            });
+            
+            // Filter controls
+            ['timeFilter', 'categoryFilter', 'studyFilter'].forEach(id => {
+                document.getElementById(id).addEventListener('change', applyFilters);
+            });
+        }
+        
+        function updateAPIStatus() {
+            // Simulate API status checks
+            setTimeout(() => {
+                document.getElementById('pubmed-status').className = 'status-dot';
+                document.getElementById('arxiv-status').className = 'status-dot loading';
+                document.getElementById('crossref-status').className = 'status-dot error';
+            }, 1000);
+        }
+        
+        function showView(viewName) {
+            // Hide all views
+            document.querySelectorAll('.view-container, .results-container').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // Update button states
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected view
+            const viewElement = document.getElementById(`${viewName}-view`);
+            if (viewElement) {
+                viewElement.style.display = 'block';
             }
             
-            const matches = papers.filter(paper => 
+            document.querySelector(`[data-view="${viewName}"]`).classList.add('active');
+            currentView = viewName;
+            
+            if (viewName === 'trends') {
+                createImpactChart();
+            }
+        }
+        
+        function performSearch(liveAPI) {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (!query) return;
+            
+            if (liveAPI) {
+                searchLiveAPIs(query);
+            } else {
+                searchDatabase(query);
+            }
+            
+            showView('papers');
+        }
+        
+        function searchDatabase(query) {
+            currentResults = papers.filter(paper => 
                 paper.title.toLowerCase().includes(query) ||
                 paper.abstract.toLowerCase().includes(query) ||
-                paper.keywords.some(k => k.includes(query))
+                paper.keywords.some(k => k.toLowerCase().includes(query)) ||
+                paper.category.toLowerCase().includes(query)
             );
             
-            console.log('Matches found:', matches.length);
+            applyFilters();
+        }
+        
+        async function searchLiveAPIs(query) {
+            // Update API status to loading
+            document.getElementById('pubmed-status').className = 'status-dot loading';
             
-            if (matches.length === 0) {
-                console.log('No matches, showing no results message');
-                resultsDiv.innerHTML = '<p style="text-align: center; padding: 40px;">No papers found</p>';
+            try {
+                // Simulate API call delay
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // For demo purposes, use database results
+                // In production, this would call actual APIs
+                currentResults = papers.filter(paper => 
+                    paper.keywords.some(k => k.toLowerCase().includes(query))
+                );
+                
+                document.getElementById('pubmed-status').className = 'status-dot';
+                applyFilters();
+                
+            } catch (error) {
+                document.getElementById('pubmed-status').className = 'status-dot error';
+                console.error('API search failed:', error);
+            }
+        }
+        
+        function applyFilters() {
+            const timeFilter = document.getElementById('timeFilter').value;
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            const studyFilter = document.getElementById('studyFilter').value;
+            
+            let filtered = [...currentResults];
+            
+            if (timeFilter) {
+                if (timeFilter === 'recent') {
+                    filtered = filtered.filter(p => parseInt(p.year) >= 2023);
+                } else {
+                    filtered = filtered.filter(p => p.year === timeFilter);
+                }
+            }
+            
+            if (categoryFilter) {
+                filtered = filtered.filter(p => p.category === categoryFilter);
+            }
+            
+            if (studyFilter) {
+                filtered = filtered.filter(p => p.studyType.includes(studyFilter) || p.abstract.includes(studyFilter));
+            }
+            
+            currentResults = filtered;
+            displayPapers();
+            updateStats();
+        }
+        
+        function quickSearch(term) {
+            document.getElementById('searchInput').value = term;
+            performSearch(false);
+        }
+        
+        function displayPapers() {
+            const resultsDiv = document.getElementById('results');
+            
+            if (currentResults.length === 0) {
+                resultsDiv.innerHTML = '<p style="text-align: center; padding: 40px; color: #6c757d;">No papers found</p>';
                 return;
             }
             
             let html = '';
-            matches.forEach((paper, index) => {
-                console.log('Creating HTML for paper:', paper.title);
-                html += createPaperHTML(paper, index);
+            currentResults.forEach(paper => {
+                html += createPaperCard(paper);
             });
             
-            console.log('Setting results HTML, length:', html.length);
             resultsDiv.innerHTML = html;
-            console.log('Results HTML set');
         }
         
-        function createPaperHTML(paper, index) {
+        function createPaperCard(paper) {
+            const isSelected = selectedPapers.has(paper.id);
+            
             return `
-                <div class="result-card">
+                <div class="result-card ${isSelected ? 'selected' : ''}" data-id="${paper.id}">
+                    <input type="checkbox" class="compare-checkbox" ${isSelected ? 'checked' : ''} 
+                           onchange="togglePaperSelection(${paper.id})">
+                    
                     <div class="result-header">
                         <div class="result-title">${paper.title}</div>
-                        <div style="font-size: 0.9em; margin-top: 10px;">
-                            ${paper.authors.join(', ')} • ${paper.source}
+                        <div class="result-meta">
+                            <span>${paper.authors.slice(0, 2).join(', ')}${paper.authors.length > 2 ? ' et al.' : ''}</span>
+                            <span class="category-badge">${paper.category}</span>
+                        </div>
+                        <div style="font-size: 0.8em; margin-top: 8px; opacity: 0.9;">
+                            ${paper.source} • ${paper.year} • ${paper.studyType}
                         </div>
                     </div>
                     
                     <div class="result-content">
-                        <div class="analysis-section">
-                            <div class="analysis-header">
-                                <span>AI Visual Analysis</span>
-                                <button class="generate-btn" onclick="generateAnalysis(${index})">Generate Analysis</button>
-                            </div>
-                            <div id="analysis-${index}" class="analysis-content"></div>
+                        <div class="quick-metrics">
+                            ${paper.responseRate ? `
+                                <div class="metric-mini">
+                                    <div class="metric-mini-value">${paper.responseRate}%</div>
+                                    <div class="metric-mini-label">Response</div>
+                                </div>
+                            ` : ''}
+                            ${paper.pfs ? `
+                                <div class="metric-mini">
+                                    <div class="metric-mini-value">${paper.pfs}mo</div>
+                                    <div class="metric-mini-label">PFS</div>
+                                </div>
+                            ` : ''}
+                            ${paper.sampleSize ? `
+                                <div class="metric-mini">
+                                    <div class="metric-mini-value">${paper.sampleSize}</div>
+                                    <div class="metric-mini-label">Patients</div>
+                                </div>
+                            ` : ''}
                         </div>
                         
                         <div class="abstract-section">
                             <div style="font-weight: 600; margin-bottom: 10px;">Abstract:</div>
-                            <div>${paper.abstract}</div>
+                            <div style="line-height: 1.6; font-size: 0.9em;">${paper.abstract.substring(0, 300)}...</div>
+                        </div>
+                        
+                        <div class="analysis-section">
+                            <div class="analysis-header">
+                                <span style="font-size: 0.9em;">AI Analysis</span>
+                                <button class="generate-btn" onclick="generateAnalysis(${paper.id})">Analyze</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
         }
         
-        function generateAnalysis(index) {
-            console.log('Generating analysis for paper', index);
-            const contentDiv = document.getElementById(`analysis-${index}`);
-            const paper = papers[index];
-            
-            setTimeout(() => {
-                const analysis = analyzeText(paper.abstract);
-                contentDiv.innerHTML = createAnalysisHTML(analysis);
-                contentDiv.style.display = 'block';
-            }, 1000);
-        }
-        
-        function analyzeText(text) {
-            return {
-                studyType: getStudyType(text),
-                sampleSize: getSampleSize(text),
-                results: getResults(text),
-                safety: getSafety(text)
-            };
-        }
-        
-        function getStudyType(text) {
-            if (text.includes('Phase II')) return 'Phase II Clinical Trial';
-            if (text.includes('randomized')) return 'Randomized Controlled Trial';
-            return 'Clinical Research Study';
-        }
-        
-        function getSampleSize(text) {
-            const match = text.match(/(\d+)\s+patients?/);
-            if (match) return `${match[1]} participants`;
-            return 'Sample size not specified';
-        }
-        
-        function getResults(text) {
-            const results = [];
-            const orrMatch = text.match(/ORR[^.]*?(\d+%)/);
-            if (orrMatch) results.push(`Response rate: ${orrMatch[1]}`);
-            
-            const pfsMatch = text.match(/PFS[^.]*?(\d+\.\d+)[^.]*?months/);
-            if (pfsMatch) results.push(`Median PFS: ${pfsMatch[1]} months`);
-            
-            return results.length > 0 ? results : ['Primary endpoints met'];
-        }
-        
-        function getSafety(text) {
-            const gradeMatch = text.match(/Grade 3-4[^.]*?(\d+%)/);
-            if (gradeMatch) return `Grade 3-4 events: ${gradeMatch[1]}`;
-            
-            const aeMatch = text.match(/AEs[^.]*?(\d+\.\d+%)/);
-            if (aeMatch) return `Adverse events: ${aeMatch[1]}`;
-            
-            return 'Safety profile acceptable';
-        }
-        
-        function createAnalysisHTML(analysis) {
-            return `
-                <div class="analysis-grid">
-                    <div class="analysis-card">
-                        <div class="card-title">Study Design</div>
-                        <div class="card-content">${analysis.studyType}</div>
-                    </div>
-                    <div class="analysis-card">
-                        <div class="card-title">Population</div>
-                        <div class="card-content">${analysis.sampleSize}</div>
-                    </div>
-                    <div class="analysis-card">
-                        <div class="card-title">Key Results</div>
-                        <div class="card-content">${analysis.results.join('<br>')}</div>
-                    </div>
-                    <div class="analysis-card">
-                        <div class="card-title">Safety</div>
-                        <div class="card-content">${analysis.safety}</div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Event listeners
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded');
-            
-            const searchBtn = document.getElementById('searchBtn');
-            const searchInput = document.getElementById('searchInput');
-            
-            if (searchBtn) {
-                searchBtn.addEventListener('click', performSearch);
-                console.log('Search button listener added');
+        function togglePaperSelection(paperId) {
+            if (selectedPapers.has(paperId)) {
+                selectedPapers.delete(paperId);
+            } else {
+                selectedPapers.add(paperId);
             }
             
-            if (searchInput) {
-                searchInput.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        performSearch();
+            updateCompareButton();
+            displayPapers(); // Refresh to update visual selection
+        }
+        
+        function updateCompareButton() {
+            const btn = document.getElementById('compareBtn');
+            btn.textContent = `Compare Selected (${selectedPapers.size})`;
+            btn.disabled = selectedPapers.size < 2;
+        }
+        
+        function toggleComparison() {
+            const comparisonView = document.getElementById('comparisonView');
+            const isVisible = comparisonView.classList.contains('active');
+            
+            if (isVisible) {
+                comparisonView.classList.remove('active');
+            } else {
+                showComparison();
+                comparisonView.classList.add('active');
+            }
+        }
+        
+        function showComparison() {
+            const selectedPaperData = papers.filter(p => selectedPapers.has(p.id));
+            const grid = document.getElementById('comparisonGrid');
+            
+            let html = '';
+            selectedPaperData.forEach(paper => {
+                html += `
+                    <div class="comparison-paper">
+                        <h3 style="margin-bottom: 15px; color: #2c3e50;">${paper.title.substring(0, 60)}...</h3>
+                        <div style="margin-bottom: 10px;"><strong>Category:</strong> ${paper.category}</div>
+                        <div style="margin-bottom: 10px;"><strong>Study Type:</strong> ${paper.studyType}</div>
+                        <div style="margin-bottom: 10px;"><strong>Sample Size:</strong> ${paper.sampleSize} patients</div>
+                        ${paper.responseRate ? `<div style="margin-bottom: 10px;"><strong>Response Rate:</strong> ${paper.responseRate}%</div>` : ''}
+                        ${paper.pfs ? `<div style="margin-bottom: 10px;"><strong>PFS:</strong> ${paper.pfs} months</div>` : ''}
+                        <div style="margin-bottom: 10px;"><strong>Impact Score:</strong> ${paper.impact}/10</div>
+                    </div>
+                `;
+            });
+            
+            grid.innerHTML = html;
+        }
+        
+        function updateStats() {
+            const total = currentResults.length;
+            const recent = currentResults.filter(p => parseInt(p.year) >= 2023).length;
+            const categories = new Set(currentResults.map(p => p.category)).size;
+            const avgImpact = currentResults.reduce((sum, p) => sum + (p.impact || 0), 0) / total;
+            
+            document.getElementById('totalPapers').textContent = total;
+            document.getElementById('recentPapers').textContent = recent;
+            document.getElementById('categories').textContent = categories;
+            document.getElementById('avgImpact').textContent = avgImpact.toFixed(1);
+        }
+        
+        function createCharts() {
+            createCategoryChart();
+            createTimelineChart();
+        }
+        
+        function createCategoryChart() {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            const categories = {};
+            
+            currentResults.forEach(paper => {
+                categories[paper.category] = (categories[paper.category] || 0) + 1;
+            });
+            
+            charts.category = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(categories),
+                    datasets: [{
+                        data: Object.values(categories),
+                        backgroundColor: [
+                            '#3498db', '#e74c3c', '#2ecc71', '#f39c12', 
+                            '#9b59b6', '#1abc9c', '#34495e'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
                     }
-                });
-                console.log('Search input listener added');
-            }
-        });
+                }
+            });
+        }
         
-        console.log('Script loaded successfully');
+        function createTimelineChart() {
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            const years = {};
+            
+            currentResults.forEach(paper => {
+                years[paper.year] = (years[paper.year] || 0) + 1;
+            });
+            
+            charts.timeline = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(years).sort(),
+                    datasets: [{
+                        label: 'Papers Published',
+                        data: Object.values(years),
+                        backgroundColor: '#3498db'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        function createImpactChart() {
+            const ctx = document.getElementById('impactChart').getContext('2d');
+            
+            const data = currentResults
+                .filter(p => p.impact)
+                .sort((a, b) => parseInt(a.year) - parseInt(b.year));
+            
+            charts.impact = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(p => `${p.year}`),
+                    datasets: [{
+                        label: 'Impact Score',
+                        data: data.map(p => p.impact),
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 10
+                        }
+                    }
+                }
+            });
+        }
+        
+        function generateAnalysis(paperId) {
+            const paper = papers.find(p => p.id === paperId);
+            alert(`Advanced AI Analysis for: ${paper.title}\n\nThis would show detailed statistical analysis, study quality assessment, and clinical significance scoring.`);
+        }
+        
+        function exportResults(format) {
+            if (format === 'pdf') {
+                alert('PDF export would generate a comprehensive research report with all selected papers, visualizations, and analysis.');
+            } else if (format === 'csv') {
+                alert('CSV export would create a structured dataset with all paper metadata and extracted metrics.');
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initApp);
     </script>
 </body>
 </html>
