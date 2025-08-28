@@ -653,16 +653,22 @@
             try {
                 updateAPIStatus('pubmed', 'loading');
                 
-                // Search query construction
-                const cancerTerms = ['cancer', 'oncology', 'tumor', 'carcinoma', 'malignancy', 'neoplasm'];
-                const enhancedQuery = `${query} AND (${cancerTerms.join(' OR ')})`;
+                // Broader search query construction
+                let searchQuery = query;
+                if (!query.toLowerCase().includes('cancer') && 
+                    !query.toLowerCase().includes('tumor') && 
+                    !query.toLowerCase().includes('oncol')) {
+                    searchQuery = `${query} AND cancer`;
+                }
                 
                 const searchParams = new URLSearchParams({
                     db: 'pubmed',
-                    term: enhancedQuery,
-                    retmax: maxResults.toString(),
+                    term: searchQuery,
+                    retmax: (maxResults * 2).toString(), // Request more to account for filtering
                     retmode: 'json',
                     sort: 'relevance',
+                    datetype: 'pdat',
+                    mindate: '2020/01/01', // Focus on recent papers
                     tool: 'cancer_research_app_v2',
                     email: 'research@example.com'
                 });
@@ -777,7 +783,7 @@
             }
         }
 
-        // arXiv API Integration
+        // Enhanced arXiv API Integration with broader search
         async function searchArXiv(query, maxResults = CONFIG.arxiv.maxResults) {
             if (!CONFIG.arxiv.enabled) return [];
             
@@ -792,63 +798,79 @@
             try {
                 updateAPIStatus('arxiv', 'loading');
                 
-                // arXiv search query - focus on relevant categories
-                const categories = ['q-bio', 'cs.AI', 'cs.LG', 'stat.ML'];
-                const searchQuery = `all:${query} AND all:cancer`;
+                // Broader arXiv search - not just q-bio
+                const searchQueries = [
+                    `all:${query} AND all:cancer`,
+                    `all:${query} AND (all:tumor OR all:oncology)`,
+                    `ti:${query}` // Title search as fallback
+                ];
                 
-                const params = new URLSearchParams({
-                    search_query: searchQuery,
-                    start: '0',
-                    max_results: maxResults.toString(),
-                    sortBy: 'relevance',
-                    sortOrder: 'descending'
-                });
+                const allPapers = [];
                 
-                const response = await fetch(`${CONFIG.arxiv.baseURL}?${params}`);
-                if (!response.ok) {
-                    throw new Error(`arXiv API error: ${response.status}`);
+                for (const searchQuery of searchQueries) {
+                    if (allPapers.length >= maxResults * 2) break;
+                    
+                    const params = new URLSearchParams({
+                        search_query: searchQuery,
+                        start: '0',
+                        max_results: Math.min(10, maxResults * 2).toString(),
+                        sortBy: 'relevance',
+                        sortOrder: 'descending'
+                    });
+                    
+                    try {
+                        const response = await fetch(`${CONFIG.arxiv.baseURL}?${params}`);
+                        if (!response.ok) continue;
+                        
+                        const xmlText = await response.text();
+                        const parser = new DOMParser();
+                        const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
+                        const entries = xmlDoc.querySelectorAll('entry');
+                        
+                        entries.forEach((entry, index) => {
+                            if (allPapers.length >= maxResults) return;
+                            
+                            const title = entry.querySelector('title')?.textContent?.trim();
+                            const summary = entry.querySelector('summary')?.textContent?.trim();
+                            
+                            // Check for cancer relevance in title or abstract
+                            const cancerKeywords = ['cancer', 'tumor', 'oncology', 'carcinoma', 'malignancy', 'therapy', 'treatment'];
+                            const textToCheck = `${title} ${summary}`.toLowerCase();
+                            const isRelevant = cancerKeywords.some(keyword => textToCheck.includes(keyword));
+                            
+                            if (title && summary && isRelevant) {
+                                const published = entry.querySelector('published')?.textContent?.trim();
+                                const authors = Array.from(entry.querySelectorAll('author name')).map(author => author.textContent.trim());
+                                const id = entry.querySelector('id')?.textContent?.trim();
+                                const categories = Array.from(entry.querySelectorAll('category')).map(cat => cat.getAttribute('term'));
+                                const arxivId = id ? id.split('/').pop() : null;
+                                
+                                allPapers.push({
+                                    title: title,
+                                    authors: authors.slice(0, 3),
+                                    source: 'arXiv Preprint',
+                                    year: published ? new Date(published).getFullYear().toString() : '2024',
+                                    category: 'Preprint Research',
+                                    abstract: summary.length > 1200 ? summary.substring(0, 1200) + '...' : summary,
+                                    keywords: [query, ...categories.slice(0, 2)],
+                                    arxivId: arxivId,
+                                    arxivURL: id,
+                                    pdfURL: `https://arxiv.org/pdf/${arxivId}.pdf`,
+                                    isLocal: false,
+                                    isLive: true,
+                                    source_type: 'arxiv'
+                                });
+                            }
+                        });
+                        
+                    } catch (searchError) {
+                        console.log('arXiv search variant failed:', searchError);
+                        continue;
+                    }
                 }
                 
-                const xmlText = await response.text();
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
-                
-                const entries = xmlDoc.querySelectorAll('entry');
-                const papers = [];
-                
-                entries.forEach((entry, index) => {
-                    if (index >= maxResults) return;
-                    
-                    const title = entry.querySelector('title')?.textContent?.trim();
-                    const summary = entry.querySelector('summary')?.textContent?.trim();
-                    const published = entry.querySelector('published')?.textContent?.trim();
-                    const authors = Array.from(entry.querySelectorAll('author name')).map(author => author.textContent.trim());
-                    const id = entry.querySelector('id')?.textContent?.trim();
-                    const categories = Array.from(entry.querySelectorAll('category')).map(cat => cat.getAttribute('term'));
-                    
-                    if (title && summary) {
-                        // Extract arXiv ID from full URL
-                        const arxivId = id ? id.split('/').pop() : null;
-                        
-                        papers.push({
-                            title: title,
-                            authors: authors.slice(0, 3),
-                            source: 'arXiv Preprint',
-                            year: published ? new Date(published).getFullYear().toString() : '2024',
-                            category: 'Preprint Research',
-                            abstract: summary.length > 1000 ? summary.substring(0, 1000) + '...' : summary,
-                            keywords: [query, ...categories.slice(0, 2)],
-                            arxivId: arxivId,
-                            arxivURL: id,
-                            isLocal: false,
-                            isLive: true,
-                            source_type: 'arxiv'
-                        });
-                    }
-                });
-                
-                updateAPIStatus('arxiv', papers.length > 0 ? 'ready' : 'partial');
-                return papers;
+                updateAPIStatus('arxiv', allPapers.length > 0 ? 'ready' : 'partial');
+                return allPapers.slice(0, maxResults);
                 
             } catch (error) {
                 console.error('arXiv API error:', error);
